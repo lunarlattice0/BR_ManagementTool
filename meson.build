@@ -3,10 +3,20 @@ project(
   'cpp',
   version : '0.1',
   meson_version : '>= 1.3.0',
-  default_options : ['warning_level=3', 'cpp_std=c++17'],
+  default_options : ['warning_level=3', 'cpp_std=c++17',],
+)
+
+asio_dep = declare_dependency(
+    include_directories: 'src/vendor/asio/asio/include'
+)
+
+crow_dep = declare_dependency(
+    include_directories: 'src/vendor/Crow/include'
 )
 
 dependencies = [
+asio_dep,
+crow_dep,
 ]
 
 brlmt_include_directories = [
@@ -24,13 +34,15 @@ exe = executable(
   install : true,
   dependencies : dependencies,
   include_directories: brlmt_include_directories,
-  link_args:['-static-libstdc++', '-static-libgcc','-pthread','-static']
+  link_args:['-static-libstdc++', '-static-libgcc','-pthread','-static'],
 )
 
 payload = library(
     'brlmt_payload',
     'src/payload.cpp',
     dependencies: dependencies,
-    include_directories: ['src/'],
-    link_args:['-static']
+    include_directories: brlmt_include_directories,
+    link_args:['-static-libstdc++','-static-libgcc','-static','-lpthread','-lws2_32','-lwsock32'],
+    # Please be aware, static link is required.
+
 )

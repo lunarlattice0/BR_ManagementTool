@@ -1,0 +1,6 @@
+[submodule "src/vendor/Crow"]
+	path = src/vendor/Crow
+	url = https://github.com/CrowCpp/Crow.git
+[submodule "src/vendor/asio"]
+	path = src/vendor/asio
+	url = https://github.com/chriskohlhoff/asio.git
