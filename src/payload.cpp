@@ -1,6 +1,9 @@
 #include "payload.hpp"
 #include "crow/logging.h"
 #include <consoleapi.h>
+#include <cstddef>
+#include <minwinbase.h>
+#include <processthreadsapi.h>
 #include <windows.h>
 #include <winnt.h>
 #include <winuser.h>
@@ -34,7 +37,7 @@ bool __stdcall DllMain(void *, std::uint32_t reason, void *) {
         freopen("CONOUT$","w", stderr);
 
         std::cout << "Trying to start HTTP Server..." << std::endl;
-        Run();
+        CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)Run, NULL, 0, NULL);
         return true;
     } else {
     return false;
