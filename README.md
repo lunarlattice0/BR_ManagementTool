@@ -1,6 +1,13 @@
 # BR_Linux_ManagementTool
 
-WIP: Retrieve Chat Messages
+A tool for assisting 24/7 server OPs of Brick Rigs. Currently not restricted to Linux systems, contrary to original plan.
+
+TODO:
+- Retrieve Chat Messages
+- Kick Players
+- Ban Players
+- Retrieve Chat Messages
+- Start the server automatically
 
 ## Building on Linux
 Run:

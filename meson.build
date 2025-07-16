@@ -42,7 +42,7 @@ payload = library(
     'src/payload.cpp',
     dependencies: dependencies,
     include_directories: brlmt_include_directories,
-    link_args:['-static-libstdc++','-static-libgcc','-static','-lpthread','-lws2_32','-lwsock32'],
+    link_args:['-static-libstdc++','-static-libgcc','-lpthread','-static','-lws2_32','-lwsock32','-lgdiplus'],
     # Please be aware, static link is required.
 
 )
