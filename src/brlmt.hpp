@@ -7,7 +7,7 @@
 #include <tlhelp32.h>
 #include <winnt.h>
 
-class Game {
+class Game final {
     private:
         HANDLE snapshot = NULL;
         HANDLE hProcess = NULL;

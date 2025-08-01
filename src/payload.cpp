@@ -1,7 +1,13 @@
 #include "payload.hpp"
+#include "crow/common.h"
+#include "crow/http_response.h"
 #include <consoleapi.h>
 #include <cstddef>
+#include <cstdint>
+#include <libloaderapi.h>
+#include <memory>
 #include <minwindef.h>
+#include <processthreadsapi.h>
 #include <windows.h>
 #include <winscard.h>
 #include <crow.h>
@@ -18,6 +24,7 @@
 #define BINDPORT 8080
 #endif
 
+// Supporting function for converting HBITMAP to png
 // Copied from https://stackoverflow.com/a/51388079, by Barmak Shemirani
 bool save_png_memory(HBITMAP hbitmap, std::vector<BYTE> &data) {
     Gdiplus::Bitmap bmp(hbitmap, nullptr);
@@ -54,6 +61,7 @@ bool save_png_memory(HBITMAP hbitmap, std::vector<BYTE> &data) {
     return true;
 }
 
+// Get screenshot of display
 std::vector<BYTE> GetScreenshot() {
     CoInitialize(NULL);
     ULONG_PTR token;
@@ -83,13 +91,29 @@ std::vector<BYTE> GetScreenshot() {
     return data;
 }
 
+// Class Initializers
+
+UWorld::UWorld() {
+    this->UWorldAdr = (uintptr_t)GetModuleHandle(NULL) + 0x1a8490e0;
+}
+
+ABrickGameMode::ABrickGameMode() {
+    auto getFunctionAdr = (uintptr_t)GetModuleHandle(NULL) + 0x0ce0460;
+    //todo
+}
+
+// Main function
 void Run() {
+    // Calculate UWorld offset
+    std::unique_ptr<UWorld> uworld = std::make_unique<UWorld>();
+
     crow::SimpleApp app;
 
     CROW_ROUTE(app, "/")([]() {
         return "Welcome to a BRLMT Server!";
     });
 
+    // Get a screenshot
     CROW_ROUTE(app, "/screenshot").methods(crow::HTTPMethod::GET)
     ([](){
         crow::response rsp;
@@ -108,9 +132,18 @@ void Run() {
         return rsp;
     });
 
-    // Stop the game.
-    CROW_ROUTE(app, "/kill").methods(crow::HTTPMethod::GET)([](){
+    // Quit the game.
+    CROW_ROUTE(app, "/kill").methods(crow::HTTPMethod::GET)
+    ([](){
+        ExitProcess(0);
+        return crow::response(200);
+    });
 
+    // Get the base address (DEBUG)
+    CROW_ROUTE(app, "/base_adr").methods(crow::HTTPMethod::GET)
+    ([]() {
+        uintptr_t base_adr = (uintptr_t)GetModuleHandle(NULL);
+        return std::to_string(base_adr);
     });
 
     app
@@ -120,6 +153,8 @@ void Run() {
         .run();
 }
 
+
+// Required Win32 Signature; don't modify
 bool __stdcall DllMain(void *, std::uint32_t reason, void *) {
     if (reason == DLL_PROCESS_ATTACH) {
         AllocConsole();
