@@ -4,11 +4,14 @@
 #define DLL_EXPORT extern "C" __declspec(dllexport)
 #include <crow.h>
 
-class UWorld final {
+constexpr uintptr_t GWorldOffset = 0x04515F18;
+constexpr uintptr_t ABrickGameMode_Get_Offset = 0x0ce0460;
+class GWorld final {
     public:
-        UWorld();
+        GWorld();
+        void* GetCurrentAdr();
     private:
-        uintptr_t UWorldAdr;
+        void* GWorldAdr;
 
 };
 
@@ -27,7 +30,7 @@ std::vector<BYTE> GetScreenshot();
 // ABrickGameMode
 class ABrickGameMode final {
     public:
-        ABrickGameMode();
+        ABrickGameMode(void* gworld);
     private:
-        uintptr_t ABrickGameModeAdr();
+        void *ABrickGameModeAdr;
 };

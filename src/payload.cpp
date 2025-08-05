@@ -93,21 +93,34 @@ std::vector<BYTE> GetScreenshot() {
 
 // Class Initializers
 
-UWorld::UWorld() {
-    this->UWorldAdr = (uintptr_t)GetModuleHandle(NULL) + 0x1a8490e0;
+GWorld::GWorld() {
+    this->GWorldAdr = *reinterpret_cast<void**>((uintptr_t)GetModuleHandle(NULL) + GWorldOffset);
 }
 
-ABrickGameMode::ABrickGameMode() {
-    auto getFunctionAdr = (uintptr_t)GetModuleHandle(NULL) + 0x0ce0460;
-    //todo
+void* GWorld::GetCurrentAdr() {
+    return this->GWorldAdr;
+}
+
+
+ABrickGameMode::ABrickGameMode(void* gworld) {
+    auto getFunctionAdr = (uintptr_t)GetModuleHandle(NULL) + ABrickGameMode_Get_Offset;
+    using getfn = void* (__cdecl *) (void* UObject);
+    getfn get = reinterpret_cast<getfn>(getFunctionAdr);
+    this->ABrickGameModeAdr = reinterpret_cast<void*>(get(gworld));
 }
 
 // Main function
 void Run() {
     // Calculate UWorld offset
-    std::unique_ptr<UWorld> uworld = std::make_unique<UWorld>();
+    std::unique_ptr<GWorld> gworld = std::make_unique<GWorld>();
 
     crow::SimpleApp app;
+
+    // Debug: Get Abrickgamemode adr
+    CROW_ROUTE(app, "/get")([&](){
+        std::unique_ptr<ABrickGameMode> current_gamemode = std::make_unique<ABrickGameMode>(gworld->GetCurrentAdr());
+        return crow::response(200);
+    });
 
     CROW_ROUTE(app, "/")([]() {
         return "Welcome to a BRLMT Server!";
