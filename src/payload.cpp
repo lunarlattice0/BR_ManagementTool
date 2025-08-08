@@ -1,6 +1,8 @@
 #include "payload.hpp"
+#include "crow/app.h"
 #include "crow/common.h"
 #include "crow/http_response.h"
+#include "crow/json.h"
 #include <consoleapi.h>
 #include <cstddef>
 #include <cstdint>
@@ -23,6 +25,17 @@
 #ifndef BINDPORT
 #define BINDPORT 8080
 #endif
+
+// Global variables
+// Please note, you MUST refresh these globals. There is no guarantee that they will be valid without a refresh.
+std::shared_ptr<GWorld> activeGWorld;
+std::shared_ptr<ABrickGameMode> activeABrickGameMode;
+
+// Refresh globalvars
+inline void refreshGlobals() {
+    activeGWorld = std::make_shared<GWorld>();
+    activeABrickGameMode = std::make_shared<ABrickGameMode>(activeGWorld->GetCurrentAdr());
+};
 
 // Supporting function for converting HBITMAP to png
 // Copied from https://stackoverflow.com/a/51388079, by Barmak Shemirani
@@ -94,40 +107,115 @@ std::vector<BYTE> GetScreenshot() {
 // Class Initializers
 
 GWorld::GWorld() {
-    this->GWorldAdr = *reinterpret_cast<void**>((uintptr_t)GetModuleHandle(NULL) + GWorldOffset);
+    this->FuncAdr = *reinterpret_cast<void**>((uintptr_t)GetModuleHandle(NULL) + GWorldOffset);
+    this->gworldptr = FuncAdr;
 }
 
 void* GWorld::GetCurrentAdr() {
-    return this->GWorldAdr;
+    return this->FuncAdr;
 }
 
-
 ABrickGameMode::ABrickGameMode(void* gworld) {
+    this->gworldptr = gworld;
+}
+
+void * ABrickGameMode::GetCurrentAdr() {
     auto getFunctionAdr = (uintptr_t)GetModuleHandle(NULL) + ABrickGameMode_Get_Offset;
     using getfn = void* (__cdecl *) (void* UObject);
     getfn get = reinterpret_cast<getfn>(getFunctionAdr);
-    this->ABrickGameModeAdr = reinterpret_cast<void*>(get(gworld));
+    return reinterpret_cast<void*>(get(this->gworldptr));
 }
 
 // Main function
 void Run() {
-    // Calculate UWorld offset
-    std::unique_ptr<GWorld> gworld = std::make_unique<GWorld>();
+    // Populate GWorld, since it will always be available.
+    activeGWorld = std::make_shared<GWorld>();
+    // Load a dummy ABrickGameMode
+    activeABrickGameMode = std::make_shared<ABrickGameMode>(activeGWorld->GetCurrentAdr());
 
     crow::SimpleApp app;
 
-    // Debug: Get Abrickgamemode adr
-    CROW_ROUTE(app, "/get")([&](){
-        std::unique_ptr<ABrickGameMode> current_gamemode = std::make_unique<ABrickGameMode>(gworld->GetCurrentAdr());
-        return crow::response(200);
+    // ABrickGameMode Funcs
+    CROW_ROUTE(app, "/ABrickGameMode")([&](){
+        crow::json::wvalue response;
+        response["/get"] = "Get active ABrickGameMode. In essence, check if in game.";
+        response["/end/match"] = "End the current match.";
+        response["/end/round"] = "End the current round. Not Implemented.";
+        response["/restart/game"] = "Restart the current game.";
+        response["/restart/allPlayers"] = "Restart all players (including dead players) to spawn.";
+        response["/kill/<player>"] = "Kill a player. Not implemented.";
+        response["/kill/vehicle/<player>"] = "Remove a player's vehicle. Not implemented.";
+        response["/kill/allVehicles"] = "Remove all vehicles. Not implemented.";
+        return response;
     });
 
+    // In essence, check if in game.
+    CROW_ROUTE(app, "/ABrickGameMode/get")([&](){
+        refreshGlobals();
+
+        if (InternalClassExists(activeABrickGameMode)) {
+            return crow::response(200);
+        } else {
+            return crow::response(503);
+        }
+    });
+
+    // End a match
+    CROW_ROUTE(app, "/ABrickGameMode/end/match")([&](){
+        refreshGlobals();
+
+        if (InternalClassExists(activeABrickGameMode)) {
+            auto endMatchFunctionAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickGameMode_EndMatch_Offset;
+            using fn = void (__thiscall *)(void * ABrickGameMode);
+            fn func = reinterpret_cast<fn>(endMatchFunctionAdr);
+            func(activeABrickGameMode->GetCurrentAdr());
+
+            return crow::response(200);
+        } else {
+            return crow::response(503);
+        }
+    });
+
+    CROW_ROUTE(app, "/ABrickGameMode/restart/game")([&]() {
+        refreshGlobals();
+        if (InternalClassExists(activeABrickGameMode)) {
+            auto restartGameFunctionAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickGameMode_RestartGame_Offset;
+            using fn = void (__thiscall *)(void * ABrickGameMode);
+            fn func = reinterpret_cast<fn>(restartGameFunctionAdr);
+            func(activeABrickGameMode->GetCurrentAdr());
+            return crow::response(200);
+        } else {
+            return crow::response(503);
+        }
+    });
+
+    CROW_ROUTE(app, "/ABrickGameMode/restart/allPlayers")([]() {
+        refreshGlobals();
+        if (InternalClassExists(activeABrickGameMode)) {
+            auto restartAllPlayersFunctionAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickGameMode_RestartAllPlayers_Offset;
+            using fn = void (__thiscall *)(void * ABrickGameMode, bool thing);
+            fn func = reinterpret_cast<fn>(restartAllPlayersFunctionAdr);
+            func(activeABrickGameMode->GetCurrentAdr(), true);
+            // TODO: Unclear what the second argument does; seems to do nothing, but cannot confirm.
+            // Please check.
+            return crow::response(200);
+        } else {
+            return crow::response(503);
+        }
+    });
+
+
+    // Info
     CROW_ROUTE(app, "/")([]() {
-        return "Welcome to a BRLMT Server!";
+        crow::json::wvalue response;
+        response["/screenshot"] = "Take a screenshot.";
+        response["/kill"] = "Quit Brick Rigs, forcefully.";
+        response["/ABrickGameMode"] = "Visit this endpoint for more information.";
+        return response;
     });
 
     // Get a screenshot
-    CROW_ROUTE(app, "/screenshot").methods(crow::HTTPMethod::GET)
+    CROW_ROUTE(app, "/screenshot")
     ([](){
         crow::response rsp;
         rsp.set_header("Content-Type", "mime/png");
@@ -145,24 +233,17 @@ void Run() {
         return rsp;
     });
 
-    // Quit the game.
-    CROW_ROUTE(app, "/kill").methods(crow::HTTPMethod::GET)
+    // Quit the game forcefully.
+    CROW_ROUTE(app, "/kill")
     ([](){
         ExitProcess(0);
         return crow::response(200);
     });
 
-    // Get the base address (DEBUG)
-    CROW_ROUTE(app, "/base_adr").methods(crow::HTTPMethod::GET)
-    ([]() {
-        uintptr_t base_adr = (uintptr_t)GetModuleHandle(NULL);
-        return std::to_string(base_adr);
-    });
-
     app
         .port(BINDPORT)
         .loglevel(crow::LogLevel::Debug)
-        .multithreaded()
+        //.multithreaded() // Don't enable multithreaded, unsure what will happen with race conditions.
         .run();
 }
 
