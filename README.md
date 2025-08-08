@@ -2,8 +2,15 @@
 
 A tool for assisting 24/7 server OPs of Brick Rigs. Currently not restricted to Linux systems, contrary to original plan.
 
+Working Features:
+- End / Restart matches
+- Reset all player positions
+
 TODO:
-- Retrieve Chat Messages
+- Restart individual rounds
+- Destroy vehicles
+- Kill players
+- Send Chat Messages
 - Kick Players
 - Ban Players
 - Retrieve Chat Messages

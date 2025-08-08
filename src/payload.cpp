@@ -140,7 +140,7 @@ void Run() {
         crow::json::wvalue response;
         response["/get"] = "Get active ABrickGameMode. In essence, check if in game.";
         response["/end/match"] = "End the current match.";
-        response["/end/round"] = "End the current round. Not Implemented.";
+        response["/end/round"] = "End the current round.";
         response["/restart/game"] = "Restart the current game.";
         response["/restart/allPlayers"] = "Restart all players (including dead players) to spawn.";
         response["/kill/<player>"] = "Kill a player. Not implemented.";
@@ -170,6 +170,26 @@ void Run() {
             fn func = reinterpret_cast<fn>(endMatchFunctionAdr);
             func(activeABrickGameMode->GetCurrentAdr());
 
+            return crow::response(200);
+        } else {
+            return crow::response(503);
+        }
+    });
+
+    CROW_ROUTE(app, "/ABrickGameMode/end/round")([&](){
+        refreshGlobals();
+        if (InternalClassExists(activeABrickGameMode)) {
+            auto endRoundFunctionAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickGameMode_EndRound_Offset;
+            using fn = void(__thiscall *)(void * ABrickGameMode, void* matchWinner, bool lastRound);
+            fn func = reinterpret_cast<fn>(endRoundFunctionAdr);
+            // Use a fake team struct
+            typedef struct {
+                unsigned char TeamID;
+            }__attribute__((packed, aligned(1))) stubbedTeam;
+            stubbedTeam * fakeTeam = new stubbedTeam{};
+            fakeTeam->TeamID = 0;
+            func(activeABrickGameMode->GetCurrentAdr(), &fakeTeam, false);
+            delete(fakeTeam);
             return crow::response(200);
         } else {
             return crow::response(503);

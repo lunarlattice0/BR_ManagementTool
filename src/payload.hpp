@@ -7,10 +7,12 @@
 
 // Offsets
 constexpr uintptr_t GWorldOffset = 0x04515F18;
+
 constexpr uintptr_t ABrickGameMode_Get_Offset = 0x0ce0460;
 constexpr uintptr_t ABrickGameMode_EndMatch_Offset = 0x0cde190;
 constexpr uintptr_t ABrickGameMode_RestartGame_Offset = 0x0cffc20;
 constexpr uintptr_t ABrickGameMode_RestartAllPlayers_Offset = 0x0cffb60;
+constexpr uintptr_t ABrickGameMode_EndRound_Offset = 0x0cde330;
 
 // DLL Entry
 bool __stdcall DllMain(void *, std::uint32_t reason, void *);
@@ -31,7 +33,6 @@ class BrickRigsInternalClass {
         void * gworldptr;
 };
 
-// GWorld
 class GWorld final : public BrickRigsInternalClass {
     public:
         GWorld();
@@ -41,7 +42,6 @@ class GWorld final : public BrickRigsInternalClass {
 
 };
 
-// ABrickGameMode
 class ABrickGameMode final : public BrickRigsInternalClass {
     public:
         ABrickGameMode(void* gworld);
