@@ -3,8 +3,13 @@ project(
   'cpp',
   version : '0.1',
   meson_version : '>= 1.3.0',
-  default_options : ['warning_level=3', 'cpp_std=c++17',],
+  default_options : ['warning_level=3', 'cpp_std=c++20',],
 )
+
+cmake = import('cmake')
+
+minhook_subproject = cmake.subproject('minhook')
+minhook_dependency = minhook_subproject.dependency('minhook')
 
 asio_dep = declare_dependency(
     include_directories: 'src/vendor/asio/asio/include'
@@ -17,6 +22,7 @@ crow_dep = declare_dependency(
 dependencies = [
 asio_dep,
 crow_dep,
+minhook_dependency,
 ]
 
 brlmt_include_directories = [

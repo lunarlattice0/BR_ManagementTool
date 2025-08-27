@@ -1,21 +1,19 @@
 #include "payload.hpp"
-#include "crow/app.h"
-#include "crow/common.h"
-#include "crow/http_response.h"
-#include "crow/json.h"
+#include "MinHook.h"
+#include "utypes/UnrealContainers.hpp"
 #include <consoleapi.h>
-#include <cstddef>
 #include <cstdint>
 #include <libloaderapi.h>
-#include <memory>
+#include <memoryapi.h>
 #include <minwindef.h>
 #include <processthreadsapi.h>
+#include <sstream>
+#include <string>
 #include <windows.h>
 #include <winscard.h>
 #include <crow.h>
 #include <gdiplus.h>
 #include <gdiplus/gdiplusheaders.h>
-
 #include <ctime>
 
 #ifndef BINDADDR
@@ -30,12 +28,25 @@
 // Please note, you MUST refresh these globals. There is no guarantee that they will be valid without a refresh.
 std::shared_ptr<GWorld> activeGWorld;
 std::shared_ptr<ABrickGameMode> activeABrickGameMode;
+std::vector<uint64_t> ABrickPlayerControllerList;
 
 // Refresh globalvars
 inline void refreshGlobals() {
     activeGWorld = std::make_shared<GWorld>();
     activeABrickGameMode = std::make_shared<ABrickGameMode>(activeGWorld->GetCurrentAdr());
+
 };
+
+// https://stackoverflow.com/a/557774
+HMODULE GetCurrentModule() {
+    HMODULE hModule=NULL;
+    GetModuleHandleEx(
+        GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+        (LPCTSTR)GetCurrentModule,
+        &hModule);
+    return hModule;
+
+}
 
 // Supporting function for converting HBITMAP to png
 // Copied from https://stackoverflow.com/a/51388079, by Barmak Shemirani
@@ -107,16 +118,23 @@ std::vector<BYTE> GetScreenshot() {
 // Class Initializers
 
 GWorld::GWorld() {
-    this->FuncAdr = *reinterpret_cast<void**>((uintptr_t)GetModuleHandle(NULL) + GWorldOffset);
-    this->gworldptr = FuncAdr;
+    this->gworldptr = *reinterpret_cast<void**>((uintptr_t)GetModuleHandle(NULL) + GWorld_Offset);
 }
 
 void* GWorld::GetCurrentAdr() {
-    return this->FuncAdr;
+    return this->gworldptr;
 }
 
 ABrickGameMode::ABrickGameMode(void* gworld) {
     this->gworldptr = gworld;
+}
+
+APlayerController::APlayerController(void * ptr) {
+    this->gworldptr = ptr;
+}
+
+void * APlayerController::GetCurrentAdr() { // SUPER DUPER CAUTION
+    return this->gworldptr;
 }
 
 void * ABrickGameMode::GetCurrentAdr() {
@@ -126,8 +144,43 @@ void * ABrickGameMode::GetCurrentAdr() {
     return reinterpret_cast<void*>(get(this->gworldptr));
 }
 
+// Hooks
+void ABrickPlayerControllerHookFuncCTOR() {
+    uint64_t rcx = 0;
+    asm volatile (
+        "":
+        "=c"(rcx)
+        ::
+    );
+    ABrickPlayerControllerList.push_back(rcx);
+    // this void function assembles with a RET instruction at the end.
+    // Since we are JMPing here, the call stack is unaffected, and the RET we replaced still happens here.
+}
+inline void ABrickPlayerControllerHookFuncDTOR() {
+    uint64_t rcx = 0;
+    asm volatile (
+        "":
+        "=c"(rcx)
+        ::
+    );
+    ABrickPlayerControllerList.erase(std::remove(ABrickPlayerControllerList.begin(), ABrickPlayerControllerList.end(), rcx), ABrickPlayerControllerList.end());
+}
+
 // Main function
 void Run() {
+    MH_Initialize();
+    // Hook ABrickPlayerController ctor and dtor
+    // Jump to the final RET instruction, since we want to intercept RCX.
+    MH_CreateHook((void*)0x140d0dd28, (void*)ABrickPlayerControllerHookFuncCTOR, nullptr);
+
+    // TODO: set up dtor hook
+    //void * aBrickPlayerControllerHookFuncTrampoline = nullptr;
+    // Destructor has a JMP, so we can't rely on the ret from the detour
+    //MH_CreateHook((void*)0x140d10109, (void*)ABrickPlayerControllerHookFuncDTOR, &aBrickPlayerControllerHookFuncTrampoline);
+    MH_EnableHook((void*)0x140d0dd28);
+    //MH_EnableHook((void*)0x140d10109);
+
+
     // Populate GWorld, since it will always be available.
     activeGWorld = std::make_shared<GWorld>();
     // Load a dummy ABrickGameMode
@@ -142,10 +195,13 @@ void Run() {
         response["/end/match"] = "End the current match.";
         response["/end/round"] = "End the current round.";
         response["/restart/game"] = "Restart the current game.";
+        //response["/get/messages"] = "Return all sent messages on the server.";
+        response["/adminSay"] = "Say something as the admin. Not yet implemented";
         response["/restart/allPlayers"] = "Restart all players (including dead players) to spawn.";
-        response["/kill/<player>"] = "Kill a player. Not implemented.";
-        response["/kill/vehicle/<player>"] = "Remove a player's vehicle. Not implemented.";
-        response["/kill/allVehicles"] = "Remove all vehicles. Not implemented.";
+        //response["/kill/<player>"] = "Kill a player. Not implemented.";
+        //response["/kill/vehicle/<player>"] = "Remove a player's vehicle. Not implemented.";
+        //response["/kill/allVehicles"] = "Remove all vehicles. Not implemented.";
+        //response["/get/allVehicles"] = "Get information about all vehicles. Not implemented.";
         return response;
     });
 
@@ -209,6 +265,21 @@ void Run() {
         }
     });
 
+    // Send the message as the body of the POST request
+    CROW_ROUTE(app, "/ABrickGameMode/adminSay").methods(crow::HTTPMethod::Post)
+    ([](const crow::request& req) {
+        refreshGlobals();
+        if (InternalClassExists(activeABrickGameMode)) {
+            std::cout << "Availalble ABPCs" << std::endl;
+            for (auto thing : ABrickPlayerControllerList) {
+                std::cout << thing << std::endl;
+            }
+            return crow::response(200);
+        } else {
+            return crow::response(503);
+        }
+    });
+
     CROW_ROUTE(app, "/ABrickGameMode/restart/allPlayers")([]() {
         refreshGlobals();
         if (InternalClassExists(activeABrickGameMode)) {
@@ -253,11 +324,43 @@ void Run() {
         return rsp;
     });
 
+    CROW_ROUTE(app, "/detach")
+    ([](){
+        MH_DisableHook(MH_ALL_HOOKS);
+        FreeLibraryAndExitThread(GetCurrentModule(), 0);
+        return crow::response(200);
+    });
+
     // Quit the game forcefully.
     CROW_ROUTE(app, "/kill")
     ([](){
         ExitProcess(0);
         return crow::response(200);
+    });
+
+    // DEBUG: Dump the memory of a certain length.
+    CROW_ROUTE(app, "/memory").methods(crow::HTTPMethod::Get)([](const crow::request& req){
+        auto address = req.url_params.get("address");
+        auto length = req.url_params.get("length");
+        crow::response rsp;
+
+        if (!address || !length) {
+            return crow::response(400);
+        }
+
+        uintptr_t addressull = strtoull(address, NULL, 0);
+        unsigned long long lengthull = strtoull(length, NULL, 0);
+
+        std::stringstream memdump;
+        for (uintptr_t p = addressull; p < addressull + lengthull; p += sizeof(char)) {
+            memdump << std::hex << (0xFF & *(char*)p) << " ";
+        }
+
+        memdump << std::endl;
+        auto memdumpStr = memdump.str();
+        rsp.write(memdumpStr.c_str());
+        rsp.set_header("Content-Disposition", "inline");
+        return rsp;
     });
 
     app
@@ -266,7 +369,6 @@ void Run() {
         //.multithreaded() // Don't enable multithreaded, unsure what will happen with race conditions.
         .run();
 }
-
 
 // Required Win32 Signature; don't modify
 bool __stdcall DllMain(void *, std::uint32_t reason, void *) {

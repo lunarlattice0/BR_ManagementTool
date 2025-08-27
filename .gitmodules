@@ -4,3 +4,15 @@
 [submodule "src/vendor/asio"]
 	path = src/vendor/asio
 	url = https://github.com/chriskohlhoff/asio.git
+[submodule "src/vendor/zydis"]
+	path = src/vendor/zydis
+	url = https://github.com/zyantific/zydis.git
+[submodule "subprojects/safetyhook"]
+	path = subprojects/safetyhook
+	url = https://github.com/cursey/safetyhook.git
+[submodule "subprojects/zydis"]
+	path = subprojects/zydis
+	url = https://github.com/zyantific/zydis.git
+[submodule "subprojects/minhook"]
+	path = subprojects/minhook
+	url = https://github.com/TsudaKageyu/minhook.git

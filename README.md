@@ -1,4 +1,4 @@
-# BR_Linux_ManagementTool
+# BR_ManagementTool
 
 A tool for assisting 24/7 server OPs of Brick Rigs. Currently not restricted to Linux systems, contrary to original plan.
 
@@ -7,16 +7,19 @@ Working Features:
 - Reset all player positions
 
 TODO:
-- Restart individual rounds
-- Destroy vehicles
+- Destroy / Blacklist vehicles
 - Kill players
 - Send Chat Messages
 - Kick Players
 - Ban Players
 - Retrieve Chat Messages
-- Start the server automatically
+- Start the server headlessly
+- General cleanup
 
-## Building on Linux
+Note:
+Investigate whether Game.ini contains defaults for server starting.
+
+## Building
 Run:
 - `meson setup --cross-file x86_64-w64-mingw32.txt build`
 - `meson compile -C build`
