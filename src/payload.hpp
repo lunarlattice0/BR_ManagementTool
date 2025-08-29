@@ -1,7 +1,5 @@
 #pragma once
 
-#include "utypes/Basic.hpp"
-#include "utypes/UnrealContainers.hpp"
 #include <cstdint>
 #include <memory>
 #define DLL_EXPORT extern "C" __declspec(dllexport)

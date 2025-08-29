@@ -1,6 +1,7 @@
 #include "payload.hpp"
 #include "MinHook.h"
-#include "utypes/UnrealContainers.hpp"
+#include "crow/common.h"
+#include "crow/json.h"
 #include <consoleapi.h>
 #include <cstdint>
 #include <libloaderapi.h>
@@ -28,7 +29,7 @@
 // Please note, you MUST refresh these globals. There is no guarantee that they will be valid without a refresh.
 std::shared_ptr<GWorld> activeGWorld;
 std::shared_ptr<ABrickGameMode> activeABrickGameMode;
-std::vector<uint64_t> ABrickPlayerControllerList;
+std::vector<uintptr_t> ABrickPlayerControllerList;
 
 // Refresh globalvars
 inline void refreshGlobals() {
@@ -144,42 +145,51 @@ void * ABrickGameMode::GetCurrentAdr() {
     return reinterpret_cast<void*>(get(this->gworldptr));
 }
 
+
 // Hooks
+void * abpchfc_ptr;
 void ABrickPlayerControllerHookFuncCTOR() {
-    uint64_t rcx = 0;
+    uintptr_t rcx = 0;
     asm volatile (
         "":
         "=c"(rcx)
         ::
     );
     ABrickPlayerControllerList.push_back(rcx);
-    // this void function assembles with a RET instruction at the end.
-    // Since we are JMPing here, the call stack is unaffected, and the RET we replaced still happens here.
+
+    using fn = void (__thiscall *)(void* abpc);
+    fn func = reinterpret_cast<fn>(abpchfc_ptr);
+    func((void*)rcx);
 }
-inline void ABrickPlayerControllerHookFuncDTOR() {
-    uint64_t rcx = 0;
+
+void * abpchfd_ptr;
+void ABrickPlayerControllerHookFuncDTOR() {
+    uintptr_t rcx = 0;
+    // Read RCX register
     asm volatile (
         "":
         "=c"(rcx)
-        ::
+        :
+        :
     );
     ABrickPlayerControllerList.erase(std::remove(ABrickPlayerControllerList.begin(), ABrickPlayerControllerList.end(), rcx), ABrickPlayerControllerList.end());
+
+    using fn = void (__thiscall *)(void* abpc);
+    fn func = reinterpret_cast<fn>(abpchfd_ptr);
+    func((void*)rcx);
 }
 
+constexpr uintptr_t ABrickPlayerControllerHookCtorAdr = 0x140d0d930;
+constexpr uintptr_t ABrickPlayerControllerHookDtorAdr = 0x140d0ff30;
 // Main function
 void Run() {
     MH_Initialize();
     // Hook ABrickPlayerController ctor and dtor
-    // Jump to the final RET instruction, since we want to intercept RCX.
-    MH_CreateHook((void*)0x140d0dd28, (void*)ABrickPlayerControllerHookFuncCTOR, nullptr);
+    MH_CreateHook((void*)ABrickPlayerControllerHookCtorAdr, (void*)ABrickPlayerControllerHookFuncCTOR, &abpchfc_ptr);
+    MH_EnableHook((void*)ABrickPlayerControllerHookCtorAdr);
 
-    // TODO: set up dtor hook
-    //void * aBrickPlayerControllerHookFuncTrampoline = nullptr;
-    // Destructor has a JMP, so we can't rely on the ret from the detour
-    //MH_CreateHook((void*)0x140d10109, (void*)ABrickPlayerControllerHookFuncDTOR, &aBrickPlayerControllerHookFuncTrampoline);
-    MH_EnableHook((void*)0x140d0dd28);
-    //MH_EnableHook((void*)0x140d10109);
-
+    MH_CreateHook((void*)ABrickPlayerControllerHookDtorAdr, (void*)ABrickPlayerControllerHookFuncDTOR, &abpchfd_ptr);
+    MH_EnableHook((void*)ABrickPlayerControllerHookDtorAdr);
 
     // Populate GWorld, since it will always be available.
     activeGWorld = std::make_shared<GWorld>();
@@ -198,6 +208,7 @@ void Run() {
         //response["/get/messages"] = "Return all sent messages on the server.";
         response["/adminSay"] = "Say something as the admin. Not yet implemented";
         response["/restart/allPlayers"] = "Restart all players (including dead players) to spawn.";
+        response["/get/allPlayers"] = "Return a JSON of all players and their address.";
         //response["/kill/<player>"] = "Kill a player. Not implemented.";
         //response["/kill/vehicle/<player>"] = "Remove a player's vehicle. Not implemented.";
         //response["/kill/allVehicles"] = "Remove all vehicles. Not implemented.";
@@ -214,6 +225,14 @@ void Run() {
         } else {
             return crow::response(503);
         }
+    });
+
+    CROW_ROUTE(app, "/ABrickGameMode/get/allPlayers").methods(crow::HTTPMethod::Get)([](){
+        crow::json::wvalue response;
+        for (auto playerController : ABrickPlayerControllerList) {
+            response["playerController"]
+        }
+
     });
 
     // End a match
@@ -269,11 +288,11 @@ void Run() {
     CROW_ROUTE(app, "/ABrickGameMode/adminSay").methods(crow::HTTPMethod::Post)
     ([](const crow::request& req) {
         refreshGlobals();
+        std::cout << "Availalble ABPCs" << std::endl;
+        for (auto thing : ABrickPlayerControllerList) {
+            std::cout << thing << std::endl;
+        }
         if (InternalClassExists(activeABrickGameMode)) {
-            std::cout << "Availalble ABPCs" << std::endl;
-            for (auto thing : ABrickPlayerControllerList) {
-                std::cout << thing << std::endl;
-            }
             return crow::response(200);
         } else {
             return crow::response(503);

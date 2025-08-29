@@ -3,12 +3,14 @@ project(
   'cpp',
   version : '0.1',
   meson_version : '>= 1.3.0',
-  default_options : ['warning_level=3', 'cpp_std=c++20',],
+  default_options : ['warning_level=3', 'cpp_std=c++23',],
 )
 
 cmake = import('cmake')
 
-minhook_subproject = cmake.subproject('minhook')
+opt_var = cmake.subproject_options()
+opt_var.add_cmake_defines({'CMAKE_TRY_COMPILE_TARGET_TYPE':'STATIC_LIBRARY'})
+minhook_subproject = cmake.subproject('minhook', options:opt_var)
 minhook_dependency = minhook_subproject.dependency('minhook')
 
 asio_dep = declare_dependency(
