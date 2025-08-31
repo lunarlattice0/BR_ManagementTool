@@ -2,6 +2,7 @@
 #include "MinHook.h"
 #include "crow/common.h"
 #include "crow/json.h"
+#include <codecvt>
 #include <consoleapi.h>
 #include <cstdint>
 #include <libloaderapi.h>
@@ -16,6 +17,7 @@
 #include <gdiplus.h>
 #include <gdiplus/gdiplusheaders.h>
 #include <ctime>
+#include "utypes/utypes.hpp"
 
 #ifndef BINDADDR
 #define BINDADDR "0.0.0.0"
@@ -179,8 +181,11 @@ void ABrickPlayerControllerHookFuncDTOR() {
     func((void*)rcx);
 }
 
-constexpr uintptr_t ABrickPlayerControllerHookCtorAdr = 0x140d0d930;
-constexpr uintptr_t ABrickPlayerControllerHookDtorAdr = 0x140d0ff30;
+constexpr uintptr_t ABrickPlayerControllerHookCtorAdr_Offset = 0x0d0d930;
+uintptr_t ABrickPlayerControllerHookCtorAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickPlayerControllerHookCtorAdr_Offset;
+constexpr uintptr_t ABrickPlayerControllerHookDtorAdr_Offset = 0x0d0ff30;
+uintptr_t ABrickPlayerControllerHookDtorAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickPlayerControllerHookDtorAdr_Offset;
+
 // Main function
 void Run() {
     MH_Initialize();
@@ -206,9 +211,9 @@ void Run() {
         response["/end/round"] = "End the current round.";
         response["/restart/game"] = "Restart the current game.";
         //response["/get/messages"] = "Return all sent messages on the server.";
-        response["/adminSay"] = "Say something as the admin. Not yet implemented";
+        //response["/adminSay"] = "Say something as the admin. Not yet implemented";
         response["/restart/allPlayers"] = "Restart all players (including dead players) to spawn.";
-        response["/get/allPlayers"] = "Return a JSON of all players and their address.";
+        response["/get/allPlayers"] = "Return a JSON of all players, in the format {memory address, name}.";
         //response["/kill/<player>"] = "Kill a player. Not implemented.";
         //response["/kill/vehicle/<player>"] = "Remove a player's vehicle. Not implemented.";
         //response["/kill/allVehicles"] = "Remove all vehicles. Not implemented.";
@@ -228,11 +233,29 @@ void Run() {
     });
 
     CROW_ROUTE(app, "/ABrickGameMode/get/allPlayers").methods(crow::HTTPMethod::Get)([](){
-        crow::json::wvalue response;
-        for (auto playerController : ABrickPlayerControllerList) {
-            response["playerController"]
-        }
+        refreshGlobals();
 
+        if (InternalClassExists(activeABrickGameMode)) {
+            crow::json::wvalue response;
+            for (uintptr_t playerController : ABrickPlayerControllerList) {
+                FString * fstr = new FString(L"");
+                auto getPlayerNameAdr = (uintptr_t) GetModuleHandleA(NULL) + 0x0d25fd0;
+                using fn = void (__thiscall *)(void * abpc, FString * fstr_ptr);
+                fn func = reinterpret_cast<fn>(getPlayerNameAdr);
+                func((void*)playerController, fstr);
+
+                // https://stackoverflow.com/questions/4804298/how-to-convert-wstring-into-string
+                using convert_type = std::codecvt_utf8<wchar_t>;
+                std::wstring_convert<convert_type, wchar_t> converter;
+                // Consider bumping min C++ to 23? Unicode support?
+
+                response[std::to_string(playerController)] = converter.to_bytes(fstr->ToWString());
+                delete(fstr);
+            }
+            return response;
+        } else {
+            return crow::json::wvalue();
+        }
     });
 
     // End a match
