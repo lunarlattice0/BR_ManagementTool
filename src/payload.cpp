@@ -2,16 +2,20 @@
 #include "MinHook.h"
 #include "crow/common.h"
 #include "crow/json.h"
+#include <atomic>
 #include <codecvt>
 #include <consoleapi.h>
 #include <cstdint>
+#include <exception>
 #include <libloaderapi.h>
 #include <memoryapi.h>
 #include <minwindef.h>
 #include <processthreadsapi.h>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <windows.h>
+#include <winnt.h>
 #include <winscard.h>
 #include <crow.h>
 #include <gdiplus.h>
@@ -31,14 +35,40 @@
 // Please note, you MUST refresh these globals. There is no guarantee that they will be valid without a refresh.
 std::shared_ptr<GWorld> activeGWorld;
 std::shared_ptr<ABrickGameMode> activeABrickGameMode;
+std::shared_ptr<ABrickGameSession> activeABrickGameSession;
 std::vector<uintptr_t> ABrickPlayerControllerList;
 
 // Refresh globalvars
 inline void refreshGlobals() {
     activeGWorld = std::make_shared<GWorld>();
     activeABrickGameMode = std::make_shared<ABrickGameMode>(activeGWorld->GetCurrentAdr());
-
+    activeABrickGameSession = std::make_shared<ABrickGameSession>(activeGWorld->GetCurrentAdr());
 };
+
+inline FText * GetFTextFromFString (FString * fstr_in) {
+    FText * ft = new FText;
+
+    auto cvtrAdr = (uintptr_t) GetModuleHandleA(NULL) + 0x0f53290;
+    using fn = void (__thiscall *)(FText *, FString *);
+    fn func = reinterpret_cast<fn>(cvtrAdr);
+    func(ft, fstr_in);
+    return ft;
+}
+
+inline FUniqueNetIdRepl * GetPlayerUniqueNetId (std::uintptr_t abpc) {
+    refreshGlobals();
+    if (InternalClassExists(activeABrickGameMode)) {
+        FUniqueNetIdRepl * funir = new FUniqueNetIdRepl;
+
+        auto converterAdr = (uintptr_t)GetModuleHandleA(NULL) + 0x0c9a5c0;
+        using fn = void (__cdecl*)(FUniqueNetIdRepl * netid, void * abpc);
+        fn func = reinterpret_cast<fn>(converterAdr);
+        func(funir, (void*) abpc);
+        return funir;
+    } else {
+        return nullptr;
+    }
+}
 
 // https://stackoverflow.com/a/557774
 HMODULE GetCurrentModule() {
@@ -136,6 +166,10 @@ APlayerController::APlayerController(void * ptr) {
     this->gworldptr = ptr;
 }
 
+ABrickGameSession::ABrickGameSession(void * gworld) {
+    this->gworldptr = gworld;
+}
+
 void * APlayerController::GetCurrentAdr() { // SUPER DUPER CAUTION
     return this->gworldptr;
 }
@@ -145,6 +179,13 @@ void * ABrickGameMode::GetCurrentAdr() {
     using getfn = void* (__cdecl *) (void* UObject);
     getfn get = reinterpret_cast<getfn>(getFunctionAdr);
     return reinterpret_cast<void*>(get(this->gworldptr));
+}
+
+void * ABrickGameSession::GetCurrentAdr() {
+    auto getFunctionAdr = (uintptr_t)GetModuleHandle(NULL) + 0x0d20e10;
+    using getfn = void * (__cdecl*)(void * UObject);
+    getfn get = reinterpret_cast<getfn>(getFunctionAdr);
+    return (void*)(get(this->gworldptr));
 }
 
 
@@ -210,14 +251,16 @@ void Run() {
         response["/end/match"] = "End the current match.";
         response["/end/round"] = "End the current round.";
         response["/restart/game"] = "Restart the current game.";
-        //response["/get/messages"] = "Return all sent messages on the server.";
-        //response["/adminSay"] = "Say something as the admin. Not yet implemented";
+        //response["/get/messages"] = "Return all sent messages on the server. Not implemented yet.";
+        response["/adminSay"] = "Say something as the admin. Include the message as the body of the request (JSON not required).";
         response["/restart/allPlayers"] = "Restart all players (including dead players) to spawn.";
         response["/get/allPlayers"] = "Return a JSON of all players, in the format {memory address, name}.";
-        //response["/kill/<player>"] = "Kill a player. Not implemented.";
-        //response["/kill/vehicle/<player>"] = "Remove a player's vehicle. Not implemented.";
-        //response["/kill/allVehicles"] = "Remove all vehicles. Not implemented.";
-        //response["/get/allVehicles"] = "Get information about all vehicles. Not implemented.";
+        response["/kill/<player>"] = "Kill a player, using the memory address of the player as an endpoint.";
+        // response["/kill/<vehicle>"] = "Remove a vehicle, using the memory address of the vehicle as an endpoint. Not implemented.";
+        // response["/get/allVehicles"] = "Get ownership information of all vehicles.";
+        response["/kick/<player>"] = "Kick a player, using the memory address of the player as an endpoint. Include the kick message as the body of the request (JSON not required).";
+        response["/ban/<player>/<duration in seconds>"] = "Ban a player, using the memory address of the player and duration as an endpoint. Include the ban message as the body of the request (JSON not required).";
+        //response["/unban/<player>"] = "Unban a player. Not implemented."
         return response;
     });
 
@@ -232,11 +275,101 @@ void Run() {
         }
     });
 
+    CROW_ROUTE(app, "/ABrickGameMode/kick/<uint>").methods(crow::HTTPMethod::Post)([](const crow::request& req, std::uintptr_t memory_adr) {
+        refreshGlobals();
+        if (InternalClassExists(activeABrickGameMode) && InternalClassExists(activeABrickGameSession)) {
+            if (std::find(ABrickPlayerControllerList.begin(), ABrickPlayerControllerList.end(), memory_adr) == ABrickPlayerControllerList.end()) {
+                throw std::out_of_range("Player not found");
+            }
+
+            auto kickPlayerFuncAdr = (uintptr_t)GetModuleHandleA(NULL) + 0x0d2d4b0;
+            using fn = bool (__thiscall*)(void * ABrickGameSession, void * abpc, void * ftxt);
+            fn func = reinterpret_cast<fn>(kickPlayerFuncAdr);
+
+            using convert_type = std::codecvt_utf8<wchar_t>;
+            std::wstring_convert<convert_type, wchar_t> converter;
+            std::wstring kickStr = converter.from_bytes(req.body);
+
+            FString * fstr = new FString(kickStr.c_str());
+            FText * ftxt = GetFTextFromFString(fstr);
+
+            bool success = func(activeABrickGameSession->GetCurrentAdr(), (void*)memory_adr, ftxt);
+
+            // crappy hack to avoid the "INVALID PLAYER" glitch
+            ABrickPlayerControllerList.erase(std::remove(ABrickPlayerControllerList.begin(), ABrickPlayerControllerList.end(), memory_adr), ABrickPlayerControllerList.end());
+
+            delete ftxt;
+            delete fstr;
+            return success ? crow::response(200) : crow::response(500);
+
+        } else {
+            return crow::response(503);
+        }
+    });
+
+
+
+    CROW_ROUTE(app, "/ABrickGameMode/ban/<uint>/<uint>").methods(crow::HTTPMethod::Post)([](const crow::request& req, std::uintptr_t memory_adr, unsigned int seconds) {
+            refreshGlobals();
+            if (InternalClassExists(activeABrickGameMode) && InternalClassExists(activeABrickGameSession)) {
+                if (std::find(ABrickPlayerControllerList.begin(), ABrickPlayerControllerList.end(), memory_adr) == ABrickPlayerControllerList.end()) {
+                    throw std::out_of_range("Player not found");
+                }
+
+                auto playerFunir = GetPlayerUniqueNetId(memory_adr);
+                FTimespan ft;
+
+                // 1 second = 10000000 ticks
+                ft.ticks = seconds * 10000000;
+
+                // TODO: fstr is actually playername...fix that eventually.
+                FString * fstr = new FString(L"");
+
+                using convert_type = std::codecvt_utf8<wchar_t>;
+                std::wstring_convert<convert_type, wchar_t> converter;
+                std::wstring kickStr = converter.from_bytes(req.body);
+                FString * reason = new FString(kickStr.c_str());
+
+                auto banPlayerFuncAdr = (uintptr_t)GetModuleHandleA(NULL) + 0x0d2d4c0;
+                using fn = void (__thiscall*)(void * ABrickGameSession, FUniqueNetIdRepl * playerFunir, FString * name, FString * reason, FTimespan * ticks);
+                fn func = reinterpret_cast<fn>(banPlayerFuncAdr);
+
+                func(activeABrickGameSession->GetCurrentAdr(), playerFunir, fstr, reason, &ft);
+
+                // crappy hack to avoid the "INVALID PLAYER" glitch
+                ABrickPlayerControllerList.erase(std::remove(ABrickPlayerControllerList.begin(), ABrickPlayerControllerList.end(), memory_adr), ABrickPlayerControllerList.end());
+
+                delete fstr;
+                delete playerFunir;
+                return crow::response(200);
+            } else {
+                return crow::response(503);
+            }
+        });
+    /*
+    CROW_ROUTE(app, "/ABrickGameMode/get/messages").methods(crow::HTTPMethod::Get)([](){
+            refreshGlobals();
+
+            if (InternalClassExists(activeABrickGameMode)) {
+                crow::json::wvalue response;
+
+                std::vector<crow::json::wvalue> listOfMessages;
+
+
+
+            } else {
+                return crow::json::wvalue();
+            }
+        });
+        */
     CROW_ROUTE(app, "/ABrickGameMode/get/allPlayers").methods(crow::HTTPMethod::Get)([](){
         refreshGlobals();
 
         if (InternalClassExists(activeABrickGameMode)) {
             crow::json::wvalue response;
+
+            std::vector<crow::json::wvalue> listOfPlayers;
+
             for (uintptr_t playerController : ABrickPlayerControllerList) {
                 FString * fstr = new FString(L"");
                 auto getPlayerNameAdr = (uintptr_t) GetModuleHandleA(NULL) + 0x0d25fd0;
@@ -249,13 +382,37 @@ void Run() {
                 std::wstring_convert<convert_type, wchar_t> converter;
                 // Consider bumping min C++ to 23? Unicode support?
 
-                response[std::to_string(playerController)] = converter.to_bytes(fstr->ToWString());
+                std::pair<std::string, crow::json::wvalue> name("name", converter.to_bytes(fstr->ToWString()));
+                std::pair<std::string, crow::json::wvalue> memory_adr("memory_adr", std::to_string(playerController));
+                crow::json::wvalue value{name, memory_adr};
+                listOfPlayers.push_back(value);
                 delete(fstr);
             }
+
+            response["players"] = crow::json::wvalue(listOfPlayers);
             return response;
         } else {
             return crow::json::wvalue();
         }
+    });
+
+    CROW_ROUTE(app, "/ABrickGameMode/kill/<uint>")([](uintptr_t memory_adr){
+        refreshGlobals();
+        if (InternalClassExists(activeABrickGameMode)) {
+            if (std::find(ABrickPlayerControllerList.begin(), ABrickPlayerControllerList.end(), memory_adr) == ABrickPlayerControllerList.end()) {
+                throw std::out_of_range("Player not found");
+            }
+
+            auto killPlayerFuncAdr = (uintptr_t)GetModuleHandleA(NULL) + 0x0d2da90;
+            using fn = void(__thiscall*)(void * abpc);
+            fn func = reinterpret_cast<fn>(killPlayerFuncAdr);
+            func((void*)memory_adr);
+            return crow::response(200);
+        } else {
+            return crow::response(503);
+        }
+
+
     });
 
     // End a match
@@ -307,15 +464,30 @@ void Run() {
         }
     });
 
-    // Send the message as the body of the POST request
+    // WIP: Send the message as the body of the POST request
     CROW_ROUTE(app, "/ABrickGameMode/adminSay").methods(crow::HTTPMethod::Post)
     ([](const crow::request& req) {
         refreshGlobals();
-        std::cout << "Availalble ABPCs" << std::endl;
-        for (auto thing : ABrickPlayerControllerList) {
-            std::cout << thing << std::endl;
-        }
         if (InternalClassExists(activeABrickGameMode)) {
+
+            uintptr_t adminPtr = ABrickPlayerControllerList.at(0);
+
+            // convert str to wstr
+            std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+            std::wstring wide = converter.from_bytes(req.body);
+
+            FString * fstr = new FString(wide.c_str());
+
+            auto adminSayFuncAdr = (uintptr_t) GetModuleHandleA(NULL) + 0x0d139a0;
+            using fn = void (__thiscall *)(void * abpc, FText *);
+            fn func = reinterpret_cast<fn>(adminSayFuncAdr);
+
+            auto ftxt = GetFTextFromFString(fstr);
+
+            func((void*)adminPtr, ftxt);
+
+            delete ftxt;
+            delete fstr;
             return crow::response(200);
         } else {
             return crow::response(503);
@@ -344,6 +516,7 @@ void Run() {
         response["/screenshot"] = "Take a screenshot.";
         response["/kill"] = "Quit Brick Rigs, forcefully.";
         response["/ABrickGameMode"] = "Visit this endpoint for more information.";
+        //response["/start"] = "Start a server with default settings. Not implemented";
         return response;
     });
 

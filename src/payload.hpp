@@ -62,7 +62,11 @@ class ABrickGameMode final : public BrickRigsInternalClass {
         void* GetCurrentAdr();
 };
 
-// ABrickPlayerController not implemented; please use ABrickGameMode to get existing players.
+class ABrickGameSession final : public BrickRigsInternalClass {
+    public:
+        ABrickGameSession(void * gworld);
+        void * GetCurrentAdr();
+};
 
 inline bool InternalClassExists(std::shared_ptr<BrickRigsInternalClass> bric) {
     if (bric->GetCurrentAdr() != 0) {
@@ -70,4 +74,4 @@ inline bool InternalClassExists(std::shared_ptr<BrickRigsInternalClass> bric) {
     } else {
         return false;
     }
-}
+};

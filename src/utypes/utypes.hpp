@@ -1,4 +1,29 @@
 // A trimmed down reimplementation of UnrealContainers.
+// Modified from BRSD, under MIT license, copyright Aaron Wilk.
+
+/*
+ MIT License
+
+ Copyright (c) 2025 Aaron Wilk
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
+
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
+ */
 #pragma once
 #include <iostream>
 
@@ -55,6 +80,7 @@ class FString : public TArray <wchar_t> {
             NumElements = NullTerminatedLength;
             MaxElements = NullTerminatedLength;
         }
+        FString() {FString(L"");};
         inline std::wstring ToWString() const {
             if (*this)
                 return std::wstring(Data);
@@ -65,3 +91,63 @@ class FString : public TArray <wchar_t> {
         //inline const wchar_t* CStr() const {return Data;}
 
 };
+
+// No actual implementation.
+struct __attribute__((packed, aligned(8))) FText {
+    uint8_t text_data[0x10];
+    uint32_t flags;
+};
+
+static_assert(alignof(FText) == 0x000008, "Wrong alignment on FText");
+static_assert(sizeof(FText) == 0x000018, "Wrong size on FText");
+static_assert(offsetof(FText, text_data) == 0x000000, "Member 'FText::TextData' has a wrong offset!");
+
+// No actual implementation.
+struct __attribute__((packed, aligned(0x1))) FUniqueNetIdRepl {
+    uint8_t data[0x28];
+};
+static_assert(alignof(FUniqueNetIdRepl) == 0x1, "Wrong alignment of FUniqueNetIdRepl");
+static_assert(sizeof(FUniqueNetIdRepl) == 0x28, "Wrong size of FUniqueNetIdRepl");
+
+struct FTimespan {
+    int64_t ticks;
+};
+static_assert(alignof(FTimespan) == 0x8, "Wrong alignment of FUniqueNetIdRepl");
+static_assert(sizeof(FTimespan) == 0x8, "Wrong size of FUniqueNetIdRepl");
+
+enum EChatMessageType {
+    None = 0x0,
+    Message = 0x1,
+    Join = 0x2,
+    Leave = 0x3,
+    Kick = 0x4,
+    JoinBanned = 0x5,
+    Unban = 0x6,
+    Death = 0x7,
+    MatchSettings = 0x8,
+    VehicleSpawnAttempt = 0x9,
+    VehicleSpawnSuccess = 0xa,
+    VehicleSpawnFailure = 0xb,
+};
+
+struct FChatMessagePlayerInfo {
+    FUniqueNetIdRepl playerid;
+    FString playername;
+};
+static_assert(alignof(FChatMessagePlayerInfo) == 0x8, "Wrong alignment of FChatMessagePlayerInfo");
+static_assert(sizeof(FChatMessagePlayerInfo) == 0x38, "Wrong size of FChatMessagePlayerInfo");
+
+struct __attribute((aligned(0x8))) FBrickChatMessage {
+    EChatMessageType messageType;
+    FChatMessagePlayerInfo sourcePlayer;
+    FChatMessagePlayerInfo receivingPlayer;
+    uint8_t pad[0x18];
+    uint8_t pad1[0x4];
+    uint8_t pad2[0x1];
+    uint8_t pad3[0x10];
+};
+
+static_assert(offsetof(FBrickChatMessage, sourcePlayer) == 0x8);
+static_assert(offsetof(FBrickChatMessage, receivingPlayer) == 0x40);
+static_assert(alignof(FBrickChatMessage) == 0x8, "Wrong alignment of FBrickChatMessage");
+static_assert(sizeof(FBrickChatMessage) == 0xa8, "Wrong size of FBrickChatMessage");
