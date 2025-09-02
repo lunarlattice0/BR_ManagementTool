@@ -16,7 +16,7 @@ jobs:
           submodules: 'true'
 
       - name: Install mingw, meson
-        run: sudo apt install -y g++-mingw-w64-x86-64 gcc-mingw-w64-x86-64 meson
+        run: sudo apt install -y g++-mingw-w64-x86-64 gcc-mingw-w64-x86-64 meson mingw-w64
 
       - name: Build
         run: meson setup --cross-file ${{github.workspace}}/x86_64-w64-mingw32.txt build && meson compile -C ${{github.workspace}}/build
