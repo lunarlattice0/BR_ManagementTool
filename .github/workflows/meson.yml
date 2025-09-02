@@ -2,19 +2,19 @@ name: Build .exe using mingw + meson.
 
 on:
   push:
-      branches: ["master"]
+    branches: ["master"]
   pull_request:
-      branches: ["master"]
+    branches: ["master"]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout project
+        uses: actions/checkout@v4
 
       - name: Install mingw, meson
-      run: sudo apt install -y g++-mingw-w64-x86-64 gcc-mingw-w64-x86-64 meson
+        run: sudo apt install -y g++-mingw-w64-x86-64 gcc-mingw-w64-x86-64 meson
 
       - name: Build
-      run: meson setup --cross-file ${{github.workspace}}/x86_64-w64-mingw32.txt build && meson compile -C ${{github.workspace}}/build
+        run: meson setup --cross-file ${{github.workspace}}/x86_64-w64-mingw32.txt build && meson compile -C ${{github.workspace}}/build
