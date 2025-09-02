@@ -18,9 +18,6 @@ TODO:
 - Start the server headlessly
 - General cleanup
 
-Note:
-Investigate whether Game.ini contains defaults for server starting.
-
 ## Building
 Run:
 - `meson setup --cross-file x86_64-w64-mingw32.txt build`
