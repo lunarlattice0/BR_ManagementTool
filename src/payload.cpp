@@ -629,9 +629,20 @@ void Run() {
         response["/screenshot"] = "Take a screenshot.";
         response["/kill"] = "Quit Brick Rigs, forcefully.";
         response["/ABrickGameMode"] = "Visit this endpoint for more information.";
-        //response["/start"] = "Start a server with default settings. Not implemented";
+        //response["/start"] = "Start a server with default settings.";
         return response;
     });
+
+    /*  TODO: implement.
+    CROW_ROUTE(app, "/start")([](){
+        ABrickGameSessionStruct * abgs = new ABrickGameSessionStruct;
+        auto abgsCtor = (uintptr_t) GetModuleHandleA(NULL) + 0x0d0d880;
+        using fn = void (__thiscall *)(void * abgs);
+        fn func = reinterpret_cast<fn>(abgsCtor);
+        func(abgs);
+        return crow::response(200);
+    });
+    */
 
     // Get a screenshot
     CROW_ROUTE(app, "/screenshot")

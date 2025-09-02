@@ -151,3 +151,10 @@ static_assert(offsetof(FBrickChatMessage, sourcePlayer) == 0x8);
 static_assert(offsetof(FBrickChatMessage, receivingPlayer) == 0x40);
 static_assert(alignof(FBrickChatMessage) == 0x8, "Wrong alignment of FBrickChatMessage");
 static_assert(sizeof(FBrickChatMessage) == 0xa8, "Wrong size of FBrickChatMessage");
+
+struct __attribute((aligned(0x1))) ABrickGameSessionStruct {
+    uint8_t data[0x2a8];
+};
+
+static_assert(alignof(ABrickGameSessionStruct) == 0x1, "Wrong alignment of ABrickGameSession");
+static_assert(sizeof(ABrickGameSessionStruct) == 0x2a8, "Wrong size of ABrickGameSession");
