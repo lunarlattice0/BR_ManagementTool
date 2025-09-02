@@ -36,7 +36,9 @@
 std::shared_ptr<GWorld> activeGWorld;
 std::shared_ptr<ABrickGameMode> activeABrickGameMode;
 std::shared_ptr<ABrickGameSession> activeABrickGameSession;
+
 std::vector<uintptr_t> ABrickPlayerControllerList;
+std::vector<uintptr_t> ABrickVehicleList;
 
 // Refresh globalvars
 inline void refreshGlobals() {
@@ -190,6 +192,22 @@ void * ABrickGameSession::GetCurrentAdr() {
 
 
 // Hooks
+void * abvhfc_ptr;
+void ABrickVehicleHookFuncCTOR() {
+    uintptr_t rcx = 0;
+    asm volatile (
+        "":
+        "=c"(rcx)
+        ::
+    );
+    ABrickVehicleList.push_back(rcx);
+
+    using fn = void (__thiscall*)(void * abv);
+    fn func = reinterpret_cast<fn>(abvhfc_ptr);
+    func((void*)rcx);
+}
+
+// BrickPlayerController
 void * abpchfc_ptr;
 void ABrickPlayerControllerHookFuncCTOR() {
     uintptr_t rcx = 0;
@@ -222,10 +240,31 @@ void ABrickPlayerControllerHookFuncDTOR() {
     func((void*)rcx);
 }
 
+void * abvhfd_ptr;
+void ABrickVehicleHookFuncDTOR() {
+    uintptr_t rcx = 0;
+    asm volatile (
+        "":
+        "=c"(rcx)
+        ::
+    );
+    ABrickVehicleList.erase(std::remove(ABrickVehicleList.begin(), ABrickVehicleList.end(), rcx), ABrickVehicleList.end());
+
+    using fn = void(__thiscall*)(void * abv);
+    fn func = reinterpret_cast<fn>(abvhfd_ptr);
+    func((void*)rcx);
+}
+
 constexpr uintptr_t ABrickPlayerControllerHookCtorAdr_Offset = 0x0d0d930;
 uintptr_t ABrickPlayerControllerHookCtorAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickPlayerControllerHookCtorAdr_Offset;
 constexpr uintptr_t ABrickPlayerControllerHookDtorAdr_Offset = 0x0d0ff30;
 uintptr_t ABrickPlayerControllerHookDtorAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickPlayerControllerHookDtorAdr_Offset;
+
+constexpr uintptr_t ABrickVehicleControllerHookCtorAdr_Offset = 0x0e03220; // NOTE: this hooks the BeginPlay(), not the ctor.
+uintptr_t ABrickVehicleControllerHookCtorAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickVehicleControllerHookCtorAdr_Offset;
+constexpr uintptr_t ABrickVehicleControllerHookDtorAdr_Offset = 0x0e0ae50; // NOTE: this hooks the Destroyed(), not the dtor.
+uintptr_t ABrickVehicleControllerHookDtorAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickVehicleControllerHookDtorAdr_Offset;
+
 
 // Main function
 void Run() {
@@ -236,6 +275,12 @@ void Run() {
 
     MH_CreateHook((void*)ABrickPlayerControllerHookDtorAdr, (void*)ABrickPlayerControllerHookFuncDTOR, &abpchfd_ptr);
     MH_EnableHook((void*)ABrickPlayerControllerHookDtorAdr);
+
+    MH_CreateHook((void*)ABrickVehicleControllerHookCtorAdr, (void*)ABrickVehicleHookFuncCTOR, &abvhfc_ptr);
+    MH_EnableHook((void*)ABrickVehicleControllerHookCtorAdr);
+
+    MH_CreateHook((void*)ABrickVehicleControllerHookDtorAdr, (void*)ABrickVehicleHookFuncDTOR, &abvhfd_ptr);
+    MH_EnableHook((void*)ABrickVehicleControllerHookDtorAdr);
 
     // Populate GWorld, since it will always be available.
     activeGWorld = std::make_shared<GWorld>();
@@ -256,11 +301,11 @@ void Run() {
         response["/restart/allPlayers"] = "Restart all players (including dead players) to spawn.";
         response["/get/allPlayers"] = "Return a JSON of all players, in the format {memory address, name}.";
         response["/kill/<player>"] = "Kill a player, using the memory address of the player as an endpoint.";
-        // response["/kill/<vehicle>"] = "Remove a vehicle, using the memory address of the vehicle as an endpoint. Not implemented.";
-        // response["/get/allVehicles"] = "Get ownership information of all vehicles.";
+        response["/scrap/<vehicle>"] = "Remove a vehicle, using the memory address of the vehicle as an endpoint.";
+        response["/get/allVehicles"] = "Get information of all vehicles.";
         response["/kick/<player>"] = "Kick a player, using the memory address of the player as an endpoint. Include the kick message as the body of the request (JSON not required).";
         response["/ban/<player>/<duration in seconds>"] = "Ban a player, using the memory address of the player and duration as an endpoint. Include the ban message as the body of the request (JSON not required).";
-        //response["/unban/<player>"] = "Unban a player. Not implemented."
+        //response["/unban/<player>"] = "Unban a player. Not implemented. TODO"
         return response;
     });
 
@@ -307,6 +352,58 @@ void Run() {
         }
     });
 
+    CROW_ROUTE(app, "/ABrickGameMode/get/allVehicles").methods(crow::HTTPMethod::Get)([](){
+            refreshGlobals();
+
+            if (InternalClassExists(activeABrickGameMode)) {
+                crow::json::wvalue response;
+
+                std::vector<crow::json::wvalue> listOfVehicles;
+
+                for (uintptr_t brickVehicle : ABrickVehicleList) {
+                    auto getSpawningPCAdr = (uintptr_t) GetModuleHandleA(NULL) + 0x0e14160;
+                    using fn = void * (__thiscall *)(void * ABrickVehicle);
+                    fn func = reinterpret_cast<fn>(getSpawningPCAdr);
+                    auto abpc = func((void*)brickVehicle);
+
+                    // set up wstring converter
+                    using convert_type = std::codecvt_utf8<wchar_t>;
+                    std::wstring_convert<convert_type, wchar_t> converter;
+
+                    // Figure out vehicle's name
+                    // FUGCFileInfo @ brickVehicle + 0x378
+                    uintptr_t fugcfileinfo = brickVehicle + 0x378;
+                    // Title @ FUGCFileInfo + 0x50;
+                    auto vehicleTitleVoidPtr = (void*)(fugcfileinfo + 0x50);
+                    FString * vehicleTitle = (FString *)(vehicleTitleVoidPtr);
+
+                    /*
+                    // Figure out vehicle's steamid
+                    // OnlineItemId @ FUGCFileInfo + 0x20
+                    auto vehicleOnlineItemIdPtr = (fugcfileinfo + 0x20);
+                    auto vehicleSteamItemIdPtr = (void*)(vehicleOnlineItemIdPtr + )
+
+                    ULONG64 steamItemId = (ULONG64)(vehicl)
+                    */
+
+
+
+                    std::pair<std::string, crow::json::wvalue> vehicle_adr("vehicle_memory_adr", std::to_string(brickVehicle));
+                    std::pair<std::string, crow::json::wvalue> memory_adr("spawning_player_adr", std::to_string((uintptr_t)abpc));
+                    std::pair<std::string, crow::json::wvalue> name("vehicle_name", converter.to_bytes(vehicleTitle->ToWString()));
+                    //std::pair<std::string, crow::json::wvalue> url("vehicle_hash", converter.to_bytes(vehicleLocalItemId->ToWString()));
+                    // TO BE IMPLEMENTED.
+
+                    crow::json::wvalue value{vehicle_adr, memory_adr, name}; //, url};
+                    listOfVehicles.push_back(value);
+                }
+
+                response["vehicles"] = crow::json::wvalue(listOfVehicles);
+                return response;
+            } else {
+                return crow::json::wvalue();
+            }
+        });
 
 
     CROW_ROUTE(app, "/ABrickGameMode/ban/<uint>/<uint>").methods(crow::HTTPMethod::Post)([](const crow::request& req, std::uintptr_t memory_adr, unsigned int seconds) {
@@ -382,6 +479,7 @@ void Run() {
                 std::wstring_convert<convert_type, wchar_t> converter;
                 // Consider bumping min C++ to 23? Unicode support?
 
+                // TODO: Get steamid
                 std::pair<std::string, crow::json::wvalue> name("name", converter.to_bytes(fstr->ToWString()));
                 std::pair<std::string, crow::json::wvalue> memory_adr("memory_adr", std::to_string(playerController));
                 crow::json::wvalue value{name, memory_adr};
@@ -393,6 +491,23 @@ void Run() {
             return response;
         } else {
             return crow::json::wvalue();
+        }
+    });
+
+    CROW_ROUTE(app, "/ABrickGameMode/scrap/<uint>")([](uintptr_t memory_adr){
+        refreshGlobals();
+        if (InternalClassExists(activeABrickGameMode)) {
+            if (std::find(ABrickVehicleList.begin(), ABrickVehicleList.end(), memory_adr) == ABrickVehicleList.end()) {
+                throw std::out_of_range("Vehicle not found");
+            }
+
+            auto scrapVehicleFuncAdr = (uintptr_t)GetModuleHandleA(NULL) + 0x0e21820;
+            using fn = void(__thiscall*)(void * abpc);
+            fn func = reinterpret_cast<fn>(scrapVehicleFuncAdr);
+            func((void*)memory_adr);
+            return crow::response(200);
+        } else {
+            return crow::response(503);
         }
     });
 
@@ -411,8 +526,6 @@ void Run() {
         } else {
             return crow::response(503);
         }
-
-
     });
 
     // End a match
