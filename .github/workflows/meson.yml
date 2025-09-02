@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
+        with:
+          submodules: 'true'
 
       - name: Install mingw, meson
         run: sudo apt install -y g++-mingw-w64-x86-64 gcc-mingw-w64-x86-64 meson
