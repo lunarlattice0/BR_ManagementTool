@@ -18,7 +18,7 @@ jobs:
           submodules: 'true'
 
       - name: Install mingw, meson
-        run: sudo pacman -Syu --noconfirm meson cmake mingw-w64-headers mingw-w64-gcc
+        run: sudo pacman -Syu --noconfirm meson cmake mingw-w64-headers mingw-w64-gcc git
 
       - name: Build
         run: meson setup --cross-file ${{github.workspace}}/x86_64-w64-mingw32.txt build && meson compile -C ${{github.workspace}}/build
