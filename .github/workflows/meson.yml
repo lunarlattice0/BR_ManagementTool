@@ -14,8 +14,9 @@ jobs:
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
-        with:
-          submodules: 'true'
+
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
 
       - name: Install mingw, meson
         run: sudo pacman -Syu --noconfirm meson cmake mingw-w64-headers mingw-w64-gcc git
