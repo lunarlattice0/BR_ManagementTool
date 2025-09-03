@@ -25,4 +25,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: blobs
-          path: build/*
+          path: |
+            BR_ManagementTool/build/brlmt.exe
+            BR_ManagementTool/build/libbrlmt_payload.dll
