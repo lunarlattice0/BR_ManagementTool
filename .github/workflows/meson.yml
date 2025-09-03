@@ -26,5 +26,5 @@ jobs:
         with:
           name: blobs
           path: |
-            build/brlmt.exe
-            build/libbrlmt_payload.dll
+            brlmt.exe
+            libbrlmt_payload.dll
