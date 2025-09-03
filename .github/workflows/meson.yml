@@ -19,7 +19,7 @@ jobs:
         run: pacman -Syu --noconfirm meson cmake mingw-w64-headers mingw-w64-gcc git
 
       - name: Checkout submodules
-        run: git submodule update --init --recursive
+        run: cd BR_Linux_ManagementTool && git submodule update --init --recursive 
       
       - name: Build
         run: meson setup --cross-file ${{github.workspace}}/x86_64-w64-mingw32.txt build && meson compile -C ${{github.workspace}}/build
