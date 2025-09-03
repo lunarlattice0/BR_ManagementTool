@@ -13,7 +13,7 @@ jobs:
       image: archlinux:latest
     steps:
       - name: Install mingw, meson
-        run: pacman -Syu --noconfirm meson cmake mingw-w64-headers mingw-w64-gcc git
+        run: pacman -Syu --noconfirm meson cmake mingw-w64-headers mingw-w64-gcc git clang
 
       - name: Checkout git repo, submodules
         run: git clone --recursive https://github.com/lunarlattice0/BR_ManagementTool.git
