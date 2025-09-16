@@ -6,22 +6,7 @@
 #include <crow.h>
 
 // Offsets
-constexpr uintptr_t GObjects_Offset = 0x043d2600;
-
-constexpr uintptr_t GWorld_Offset = 0x04515F18;
-constexpr uintptr_t GWorld_PlayerControllerList_Offset = GWorld_Offset + 0x1c0;
-
-constexpr uintptr_t ABrickGameMode_Get_Offset = 0x0ce0460;
-constexpr uintptr_t ABrickGameMode_EndMatch_Offset = 0x0cde190;
-constexpr uintptr_t ABrickGameMode_RestartGame_Offset = 0x0cffc20;
-constexpr uintptr_t ABrickGameMode_RestartAllPlayers_Offset = 0x0cffb60;
-constexpr uintptr_t ABrickGameMode_EndRound_Offset = 0x0cde330;
-
-constexpr uintptr_t ABrickPlayerController_AdminSay_Offset = 0x140d139a0;
-constexpr uintptr_t ABrickPlayerController_KillCharacter_Offset = 0x140d2da90;
-constexpr uintptr_t ABrickPlayerController_ExplodeVehicle_Offset = 0x140d1e220;
-constexpr uintptr_t ABrickPlayerController_Say_Offset = 0x140d3c460;
-constexpr uintptr_t ABrickPlayerController_ScrapAllVehicles_Offset = 0x140d3c470;
+#include "offsets.hpp"
 
 // DLL Entry
 bool __stdcall DllMain(void *, std::uint32_t reason, void *);
