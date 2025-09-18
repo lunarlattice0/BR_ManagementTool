@@ -2,11 +2,9 @@
 #include "MinHook.h"
 #include "crow/common.h"
 #include "crow/json.h"
-#include <atomic>
 #include <codecvt>
 #include <consoleapi.h>
 #include <cstdint>
-#include <exception>
 #include <libloaderapi.h>
 #include <memoryapi.h>
 #include <minwindef.h>
@@ -21,6 +19,7 @@
 #include <gdiplus.h>
 #include <gdiplus/gdiplusheaders.h>
 #include <ctime>
+#include "offsets.hpp"
 #include "utypes/utypes.hpp"
 
 #ifndef BINDADDR
@@ -40,6 +39,24 @@ std::shared_ptr<ABrickGameSession> activeABrickGameSession;
 std::vector<uintptr_t> ABrickPlayerControllerList;
 std::vector<uintptr_t> ABrickVehicleList;
 
+// macros for calling funcs
+template <typename returnType, typename fn_sig, typename...args>
+static inline returnType CALL_BR_FUNC_WITH_RETURN(uintptr_t offset, args... arguments) {
+    auto funcAdr = (uintptr_t)GetModuleHandleA(NULL) + offset;
+    using fn = fn_sig;
+    fn br_func = reinterpret_cast<fn>(funcAdr);
+    return br_func(arguments...);
+}
+
+template <typename fn_sig, typename...args>
+static inline void CALL_BR_FUNC(uintptr_t offset, args... arguments) {
+    auto funcAdr = (uintptr_t)GetModuleHandleA(NULL) + offset;
+    using fn = fn_sig;
+    fn br_func = reinterpret_cast<fn>(funcAdr);
+    br_func(arguments...);
+    return;
+}
+
 // Refresh globalvars
 inline void refreshGlobals() {
     activeGWorld = std::make_shared<GWorld>();
@@ -49,11 +66,8 @@ inline void refreshGlobals() {
 
 inline FText * GetFTextFromFString (FString * fstr_in) {
     FText * ft = new FText;
+    CALL_BR_FUNC<void (__thiscall *)(FText *, FString *)>(FTextToFString_Offset, ft, fstr_in);
 
-    auto cvtrAdr = (uintptr_t) GetModuleHandleA(NULL) + 0x0f53290;
-    using fn = void (__thiscall *)(FText *, FString *);
-    fn func = reinterpret_cast<fn>(cvtrAdr);
-    func(ft, fstr_in);
     return ft;
 }
 
@@ -62,11 +76,9 @@ inline FUniqueNetIdRepl * GetPlayerUniqueNetId (std::uintptr_t abpc) {
     if (InternalClassExists(activeABrickGameMode)) {
         FUniqueNetIdRepl * funir = new FUniqueNetIdRepl;
 
-        auto converterAdr = (uintptr_t)GetModuleHandleA(NULL) + 0x0c9a5c0;
-        using fn = void (__cdecl*)(FUniqueNetIdRepl * netid, void * abpc);
-        fn func = reinterpret_cast<fn>(converterAdr);
-        func(funir, (void*) abpc);
+        CALL_BR_FUNC<void (__cdecl*)(FUniqueNetIdRepl * netid, void * abpc)>(GetPlayerUniqueNetId_Offset, funir, (void*)abpc);
         return funir;
+
     } else {
         return nullptr;
     }
@@ -177,17 +189,12 @@ void * APlayerController::GetCurrentAdr() { // SUPER DUPER CAUTION
 }
 
 void * ABrickGameMode::GetCurrentAdr() {
-    auto getFunctionAdr = (uintptr_t)GetModuleHandle(NULL) + ABrickGameMode_Get_Offset;
-    using getfn = void* (__cdecl *) (void* UObject);
-    getfn get = reinterpret_cast<getfn>(getFunctionAdr);
-    return reinterpret_cast<void*>(get(this->gworldptr));
+    return CALL_BR_FUNC_WITH_RETURN<void*, void* (__cdecl *) (void* UObject)>(ABrickGameMode_Get_Offset, this->gworldptr);
+
 }
 
 void * ABrickGameSession::GetCurrentAdr() {
-    auto getFunctionAdr = (uintptr_t)GetModuleHandle(NULL) + 0x0d20e10;
-    using getfn = void * (__cdecl*)(void * UObject);
-    getfn get = reinterpret_cast<getfn>(getFunctionAdr);
-    return (void*)(get(this->gworldptr));
+    return CALL_BR_FUNC_WITH_RETURN<void*, void*(__cdecl*)(void * UObject)>(ABrickGameSession_Get_Offset, this->gworldptr);
 }
 
 
@@ -255,14 +262,10 @@ void ABrickVehicleHookFuncDTOR() {
     func((void*)rcx);
 }
 
-constexpr uintptr_t ABrickPlayerControllerHookCtorAdr_Offset = 0x0d0d930;
 uintptr_t ABrickPlayerControllerHookCtorAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickPlayerControllerHookCtorAdr_Offset;
-constexpr uintptr_t ABrickPlayerControllerHookDtorAdr_Offset = 0x0d0ff30;
 uintptr_t ABrickPlayerControllerHookDtorAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickPlayerControllerHookDtorAdr_Offset;
 
-constexpr uintptr_t ABrickVehicleControllerHookCtorAdr_Offset = 0x0e03220; // NOTE: this hooks the BeginPlay(), not the ctor.
 uintptr_t ABrickVehicleControllerHookCtorAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickVehicleControllerHookCtorAdr_Offset;
-constexpr uintptr_t ABrickVehicleControllerHookDtorAdr_Offset = 0x0e0ae50; // NOTE: this hooks the Destroyed(), not the dtor.
 uintptr_t ABrickVehicleControllerHookDtorAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickVehicleControllerHookDtorAdr_Offset;
 
 
@@ -327,10 +330,6 @@ void Run() {
                 throw std::out_of_range("Player not found");
             }
 
-            auto kickPlayerFuncAdr = (uintptr_t)GetModuleHandleA(NULL) + 0x0d2d4b0;
-            using fn = bool (__thiscall*)(void * ABrickGameSession, void * abpc, void * ftxt);
-            fn func = reinterpret_cast<fn>(kickPlayerFuncAdr);
-
             using convert_type = std::codecvt_utf8<wchar_t>;
             std::wstring_convert<convert_type, wchar_t> converter;
             std::wstring kickStr = converter.from_bytes(req.body);
@@ -338,7 +337,11 @@ void Run() {
             FString * fstr = new FString(kickStr.c_str());
             FText * ftxt = GetFTextFromFString(fstr);
 
-            bool success = func(activeABrickGameSession->GetCurrentAdr(), (void*)memory_adr, ftxt);
+            bool success = CALL_BR_FUNC_WITH_RETURN<bool, bool(__thiscall*)(void*ABrickGameSession, void * abpc, void * ftxt)>(
+                ABrickGameSession_KickPlayer_Offset,
+                activeABrickGameSession->GetCurrentAdr(),
+                (void*)memory_adr, ftxt
+            );
 
             // crappy hack to avoid the "INVALID PLAYER" glitch
             ABrickPlayerControllerList.erase(std::remove(ABrickPlayerControllerList.begin(), ABrickPlayerControllerList.end(), memory_adr), ABrickPlayerControllerList.end());
@@ -361,10 +364,9 @@ void Run() {
                 std::vector<crow::json::wvalue> listOfVehicles;
 
                 for (uintptr_t brickVehicle : ABrickVehicleList) {
-                    auto getSpawningPCAdr = (uintptr_t) GetModuleHandleA(NULL) + 0x0e14160;
-                    using fn = void * (__thiscall *)(void * ABrickVehicle);
-                    fn func = reinterpret_cast<fn>(getSpawningPCAdr);
-                    auto abpc = func((void*)brickVehicle);
+
+                    auto abpc = CALL_BR_FUNC_WITH_RETURN<void*, void * (__thiscall *)(void * ABrickVehicle)>(ABrickVehicle_GetSpawningPlayerControllerAdr_Offset,
+                        (void*)brickVehicle);
 
                     // set up wstring converter
                     using convert_type = std::codecvt_utf8<wchar_t>;
@@ -427,11 +429,15 @@ void Run() {
                 std::wstring kickStr = converter.from_bytes(req.body);
                 FString * reason = new FString(kickStr.c_str());
 
-                auto banPlayerFuncAdr = (uintptr_t)GetModuleHandleA(NULL) + 0x0d2d4c0;
-                using fn = void (__thiscall*)(void * ABrickGameSession, FUniqueNetIdRepl * playerFunir, FString * name, FString * reason, FTimespan * ticks);
-                fn func = reinterpret_cast<fn>(banPlayerFuncAdr);
+                CALL_BR_FUNC<void (__thiscall*)(void * ABrickGameSession, FUniqueNetIdRepl * playerFunir, FString * name, FString * reason, FTimespan * ticks)>(
+                    ABrickGameSession_BanPlayer_Offset,
 
-                func(activeABrickGameSession->GetCurrentAdr(), playerFunir, fstr, reason, &ft);
+                    activeABrickGameSession->GetCurrentAdr(),
+                    playerFunir,
+                    fstr,
+                    reason,
+                    &ft
+                    );
 
                 // crappy hack to avoid the "INVALID PLAYER" glitch
                 ABrickPlayerControllerList.erase(std::remove(ABrickPlayerControllerList.begin(), ABrickPlayerControllerList.end(), memory_adr), ABrickPlayerControllerList.end());
@@ -469,10 +475,8 @@ void Run() {
 
             for (uintptr_t playerController : ABrickPlayerControllerList) {
                 FString * fstr = new FString(L"");
-                auto getPlayerNameAdr = (uintptr_t) GetModuleHandleA(NULL) + 0x0d25fd0;
-                using fn = void (__thiscall *)(void * abpc, FString * fstr_ptr);
-                fn func = reinterpret_cast<fn>(getPlayerNameAdr);
-                func((void*)playerController, fstr);
+                CALL_BR_FUNC<void (__thiscall *)(void * abpc, FString * fstr_ptr)>(ABrickPlayerController_GetPlayerName_Offset,
+                    (void*)playerController, fstr);
 
                 // https://stackoverflow.com/questions/4804298/how-to-convert-wstring-into-string
                 using convert_type = std::codecvt_utf8<wchar_t>;
@@ -501,10 +505,8 @@ void Run() {
                 throw std::out_of_range("Vehicle not found");
             }
 
-            auto scrapVehicleFuncAdr = (uintptr_t)GetModuleHandleA(NULL) + 0x0e21820;
-            using fn = void(__thiscall*)(void * abpc);
-            fn func = reinterpret_cast<fn>(scrapVehicleFuncAdr);
-            func((void*)memory_adr);
+            CALL_BR_FUNC<void(__thiscall*)(void*abpc)>(ABrickVehicle_ScrapVehicle_Offset, (void*)memory_adr);
+
             return crow::response(200);
         } else {
             return crow::response(503);
@@ -518,10 +520,9 @@ void Run() {
                 throw std::out_of_range("Player not found");
             }
 
-            auto killPlayerFuncAdr = (uintptr_t)GetModuleHandleA(NULL) + 0x0d2da90;
-            using fn = void(__thiscall*)(void * abpc);
-            fn func = reinterpret_cast<fn>(killPlayerFuncAdr);
-            func((void*)memory_adr);
+
+            CALL_BR_FUNC<void(__thiscall*)(void*abpc)>(ABrickPlayerController_KillCharacter_Offset, (void*)memory_adr);
+
             return crow::response(200);
         } else {
             return crow::response(503);
@@ -533,11 +534,8 @@ void Run() {
         refreshGlobals();
 
         if (InternalClassExists(activeABrickGameMode)) {
-            auto endMatchFunctionAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickGameMode_EndMatch_Offset;
-            using fn = void (__thiscall *)(void * ABrickGameMode);
-            fn func = reinterpret_cast<fn>(endMatchFunctionAdr);
-            func(activeABrickGameMode->GetCurrentAdr());
 
+            CALL_BR_FUNC<void (__thiscall *)(void * ABrickGameMode)>(ABrickGameMode_EndMatch_Offset, activeABrickGameMode->GetCurrentAdr());
             return crow::response(200);
         } else {
             return crow::response(503);
@@ -547,16 +545,15 @@ void Run() {
     CROW_ROUTE(app, "/ABrickGameMode/end/round")([&](){
         refreshGlobals();
         if (InternalClassExists(activeABrickGameMode)) {
-            auto endRoundFunctionAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickGameMode_EndRound_Offset;
-            using fn = void(__thiscall *)(void * ABrickGameMode, void* matchWinner, bool lastRound);
-            fn func = reinterpret_cast<fn>(endRoundFunctionAdr);
             // Use a fake team struct
             typedef struct {
                 unsigned char TeamID;
             }__attribute__((packed, aligned(1))) stubbedTeam;
             stubbedTeam * fakeTeam = new stubbedTeam{};
             fakeTeam->TeamID = 0;
-            func(activeABrickGameMode->GetCurrentAdr(), &fakeTeam, false);
+            //func(activeABrickGameMode->GetCurrentAdr(), &fakeTeam, false);
+            CALL_BR_FUNC<void(__thiscall*)(void*ABrickGameMode,void*matchWinner,bool lastRound)>(
+                ABrickGameMode_EndRound_Offset, activeABrickGameMode->GetCurrentAdr(), &fakeTeam, false);
             delete(fakeTeam);
             return crow::response(200);
         } else {
@@ -567,17 +564,13 @@ void Run() {
     CROW_ROUTE(app, "/ABrickGameMode/restart/game")([&]() {
         refreshGlobals();
         if (InternalClassExists(activeABrickGameMode)) {
-            auto restartGameFunctionAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickGameMode_RestartGame_Offset;
-            using fn = void (__thiscall *)(void * ABrickGameMode);
-            fn func = reinterpret_cast<fn>(restartGameFunctionAdr);
-            func(activeABrickGameMode->GetCurrentAdr());
+            CALL_BR_FUNC<void (__thiscall *)(void * ABrickGameMode)>(ABrickGameMode_RestartGame_Offset, activeABrickGameMode->GetCurrentAdr());
             return crow::response(200);
         } else {
             return crow::response(503);
         }
     });
 
-    // WIP: Send the message as the body of the POST request
     CROW_ROUTE(app, "/ABrickGameMode/adminSay").methods(crow::HTTPMethod::Post)
     ([](const crow::request& req) {
         refreshGlobals();
@@ -591,13 +584,9 @@ void Run() {
 
             FString * fstr = new FString(wide.c_str());
 
-            auto adminSayFuncAdr = (uintptr_t) GetModuleHandleA(NULL) + 0x0d139a0;
-            using fn = void (__thiscall *)(void * abpc, FText *);
-            fn func = reinterpret_cast<fn>(adminSayFuncAdr);
-
             auto ftxt = GetFTextFromFString(fstr);
 
-            func((void*)adminPtr, ftxt);
+            CALL_BR_FUNC<void(__thiscall*)(void*abpc, FText*)>(ABrickPlayerController_AdminSay_Offset, (void*)adminPtr, ftxt);
 
             delete ftxt;
             delete fstr;
@@ -610,10 +599,7 @@ void Run() {
     CROW_ROUTE(app, "/ABrickGameMode/restart/allPlayers")([]() {
         refreshGlobals();
         if (InternalClassExists(activeABrickGameMode)) {
-            auto restartAllPlayersFunctionAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickGameMode_RestartAllPlayers_Offset;
-            using fn = void (__thiscall *)(void * ABrickGameMode, bool thing);
-            fn func = reinterpret_cast<fn>(restartAllPlayersFunctionAdr);
-            func(activeABrickGameMode->GetCurrentAdr(), true);
+            CALL_BR_FUNC<void(__thiscall*)(void*ABrickGameMode, bool thing)>(ABrickGameMode_RestartAllPlayers_Offset, activeABrickGameMode->GetCurrentAdr(), true);
             // TODO: Unclear what the second argument does; seems to do nothing, but cannot confirm.
             // Please check.
             return crow::response(200);
