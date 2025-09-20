@@ -16,7 +16,8 @@ Working Features:
 TODO:
 - Retrieve Chat Messages
 - Start the server headlessly
-- General cleanup
+- Whitelist system
+- Map voting system
 
 ## Building
 Run:
