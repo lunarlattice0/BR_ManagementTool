@@ -21,10 +21,13 @@ constexpr uintptr_t ABrickGameSession_BanPlayer_Offset = 0x0d2d4c0;
 constexpr uintptr_t ABrickVehicle_GetSpawningPlayerControllerAdr_Offset =  0x0e14160;
 constexpr uintptr_t ABrickVehicle_ScrapVehicle_Offset = 0x0e21820;
 
-constexpr uintptr_t FTextToFString_Offset = 0x0f53290;
+constexpr uintptr_t FTextFromFString_Offset = 0x0f53290;
 constexpr uintptr_t GetPlayerUniqueNetId_Offset = 0x0c9a5c0;
+constexpr uintptr_t FTextToFString_Offset = 0x0f69af0;
 
 constexpr uintptr_t ABrickPlayerControllerHookCtorAdr_Offset = 0x0d0d930;
 constexpr uintptr_t ABrickPlayerControllerHookDtorAdr_Offset = 0x0d0ff30;
 constexpr uintptr_t ABrickVehicleControllerHookCtorAdr_Offset = 0x0e03220; // NOTE: this hooks the BeginPlay(), not the ctor.
 constexpr uintptr_t ABrickVehicleControllerHookDtorAdr_Offset = 0x0e0ae50; // NOTE: this hooks the Destroyed(), not the dtor.
+
+constexpr uintptr_t AddChatMessageAdr_Offset = 0x0d131d0;

@@ -141,7 +141,7 @@ struct __attribute((aligned(0x8))) FBrickChatMessage {
     EChatMessageType messageType;
     FChatMessagePlayerInfo sourcePlayer;
     FChatMessagePlayerInfo receivingPlayer;
-    uint8_t pad[0x18];
+    FText text;
     uint8_t pad1[0x4];
     uint8_t pad2[0x1];
     uint8_t pad3[0x10];
