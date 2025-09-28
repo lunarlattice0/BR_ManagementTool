@@ -12,9 +12,9 @@ Working Features:
 - Send Chat Messages as an Admin
 - Kick Players
 - Ban Players
+- Retrieve Chat Messages
 
 TODO:
-- Retrieve Chat Messages
 - Start the server headlessly
 - Get vehicle steamid
 - Change map system
