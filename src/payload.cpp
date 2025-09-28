@@ -1,6 +1,7 @@
 #include "payload.hpp"
 #include "MinHook.h"
 #include "crow/common.h"
+#include "crow/http_response.h"
 #include "crow/http_server.h"
 #include "crow/json.h"
 #include <codecvt>
@@ -75,7 +76,8 @@ inline FText * GetFTextFromFString (FString * fstr_in) {
 }
 
 inline FString * GetFStringFromFText(FText * ftxt) {
-    return CALL_BR_FUNC_WITH_RETURN<FString *, FString *(__thiscall *)(FText *)>(FTextToFString_Offset, ftxt);
+    FString * fstr = CALL_BR_FUNC_WITH_RETURN<FString *, FString *(__thiscall *)(FText *)>(FTextToFString_Offset, ftxt);
+    return fstr;
 };
 
 inline FUniqueNetIdRepl * GetPlayerUniqueNetId (std::uintptr_t abpc) {
@@ -237,8 +239,8 @@ void ABrickPlayerControllerHookFuncCTOR() {
     func((void*)rcx);
 }
 
-void * acm_ptr;
-void AddChatMessageHookFunc() {
+void * fbcmc_ptr;
+void FBrickChatMessageCtorHookFunc() {
     uintptr_t rcx = 0;
     uintptr_t rdx = 0;
     asm volatile (
@@ -246,13 +248,11 @@ void AddChatMessageHookFunc() {
         "=c"(rcx), "=d"(rdx)
         ::
     );
-    ChatMessageList.push_back(rdx);
+    ChatMessageList.push_back(rcx);
 
     using fn = void(__thiscall *)(void * abgs, void* fbcm);
-    fn func = reinterpret_cast<fn>(acm_ptr);
+    fn func = reinterpret_cast<fn>(fbcmc_ptr);
     func((void*)rcx, (void*)rdx);
-    std::cout << "AddChatMessage called: " << rdx << std::endl;
-    // TODO: Figure out why rdx is the same every time
 }
 
 void * abpchfd_ptr;
@@ -293,7 +293,7 @@ uintptr_t ABrickPlayerControllerHookDtorAdr = (uintptr_t) GetModuleHandleA(NULL)
 uintptr_t ABrickVehicleControllerHookCtorAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickVehicleControllerHookCtorAdr_Offset;
 uintptr_t ABrickVehicleControllerHookDtorAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickVehicleControllerHookDtorAdr_Offset;
 
-uintptr_t AddChatMessageAdr = (uintptr_t) GetModuleHandleA(NULL) + AddChatMessageAdr_Offset;
+uintptr_t AddChatMessageAdr = (uintptr_t) GetModuleHandleA(NULL) + FBrickChatMessageCtor_Offset;
 
 // Main function
 void Run() {
@@ -313,7 +313,7 @@ void Run() {
     MH_EnableHook((void*)ABrickVehicleControllerHookDtorAdr);
 
     // Hook ServerSendChatMessage
-    MH_CreateHook((void*) AddChatMessageAdr, (void*)AddChatMessageHookFunc, &acm_ptr);
+    MH_CreateHook((void*) AddChatMessageAdr, (void*)FBrickChatMessageCtorHookFunc, &fbcmc_ptr);
     MH_EnableHook((void*) AddChatMessageAdr);
 
     // Populate GWorld, since it will always be available.
@@ -485,14 +485,39 @@ void Run() {
     CROW_ROUTE(app, "/ABrickGameMode/get/messages").methods(crow::HTTPMethod::Get)([](){
             refreshGlobals();
             if (InternalClassExists(activeABrickGameMode)) {
+                crow::json::wvalue response;
+                std::vector<crow::json::wvalue> listOfMessages;
+
                 for (auto messageAdr : ChatMessageList) {
-                    std::cout << messageAdr << std::endl;
                     auto messagePtr = static_cast<FBrickChatMessage *>((void*)messageAdr);
-                    std::cout << messagePtr->messageType << std::endl;
 
+                    using convert_type = std::codecvt_utf8<wchar_t>;
+                    std::wstring_convert<convert_type, wchar_t> converter;
+
+                    std::pair<std::string, crow::json::wvalue> originPlayer("OriginPlayer", converter.to_bytes(messagePtr->sourcePlayer.playername.ToWString()));
+                    std::pair<std::string, crow::json::wvalue> receivingPlayer("ReceivingPlayer", converter.to_bytes(messagePtr->receivingPlayer.playername.ToWString()));
+
+                    FText * ft = new FText();
+                    CALL_BR_FUNC<FText*(__thiscall*)(FBrickChatMessage * fbcm, FText * ft)>(FBrickChatMessageGetMessageText_Offset, (FBrickChatMessage*)messageAdr, ft);
+
+                    auto mcText = converter.to_bytes(GetFStringFromFText(ft)->ToWString());
+
+                    std::time_t result = std::time(nullptr);
+                    auto ts = std::string(std::asctime(std::localtime(&result)));
+                    ts.erase(std::remove(ts.begin(), ts.end(), '\n'), ts.cend());
+
+                    std::pair<std::string, crow::json::wvalue> messageContent("MessageContent", mcText);
+                    std::pair<std::string, crow::json::wvalue> timestamp("Timestamp", ts);
+
+                    crow::json::wvalue value{originPlayer, receivingPlayer, messageContent, timestamp};
+                    if (mcText != "INVALID TYPE") {
+                        listOfMessages.push_back(value);
+                    }
+                    delete(ft);
                 }
+                response["messages"] = crow::json::wvalue(listOfMessages);
 
-                return crow::json::wvalue();
+                return response;
             } else {
                 return crow::json::wvalue();
             }

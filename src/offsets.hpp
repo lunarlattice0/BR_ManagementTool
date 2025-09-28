@@ -30,4 +30,5 @@ constexpr uintptr_t ABrickPlayerControllerHookDtorAdr_Offset = 0x0d0ff30;
 constexpr uintptr_t ABrickVehicleControllerHookCtorAdr_Offset = 0x0e03220; // NOTE: this hooks the BeginPlay(), not the ctor.
 constexpr uintptr_t ABrickVehicleControllerHookDtorAdr_Offset = 0x0e0ae50; // NOTE: this hooks the Destroyed(), not the dtor.
 
-constexpr uintptr_t AddChatMessageAdr_Offset = 0x0d131d0;
+constexpr uintptr_t FBrickChatMessageCtor_Offset = 0x0d0e8e0;
+constexpr uintptr_t FBrickChatMessageGetMessageText_Offset = 0x0d24820;
