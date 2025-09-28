@@ -1,10 +1,13 @@
 #include "payload.hpp"
 #include "MinHook.h"
 #include "crow/common.h"
+#include "crow/http_response.h"
+#include "crow/http_server.h"
 #include "crow/json.h"
 #include <codecvt>
 #include <consoleapi.h>
 #include <cstdint>
+#include <iostream>
 #include <libloaderapi.h>
 #include <memoryapi.h>
 #include <minwindef.h>
@@ -38,6 +41,7 @@ std::shared_ptr<ABrickGameSession> activeABrickGameSession;
 
 std::vector<uintptr_t> ABrickPlayerControllerList;
 std::vector<uintptr_t> ABrickVehicleList;
+std::vector<uintptr_t> ChatMessageList;
 
 // macros for calling funcs
 template <typename returnType, typename fn_sig, typename...args>
@@ -66,10 +70,15 @@ inline void refreshGlobals() {
 
 inline FText * GetFTextFromFString (FString * fstr_in) {
     FText * ft = new FText;
-    CALL_BR_FUNC<void (__thiscall *)(FText *, FString *)>(FTextToFString_Offset, ft, fstr_in);
+    CALL_BR_FUNC<void (__thiscall *)(FText *, FString *)>(FTextFromFString_Offset, ft, fstr_in);
 
     return ft;
 }
+
+inline FString * GetFStringFromFText(FText * ftxt) {
+    FString * fstr = CALL_BR_FUNC_WITH_RETURN<FString *, FString *(__thiscall *)(FText *)>(FTextToFString_Offset, ftxt);
+    return fstr;
+};
 
 inline FUniqueNetIdRepl * GetPlayerUniqueNetId (std::uintptr_t abpc) {
     refreshGlobals();
@@ -230,6 +239,22 @@ void ABrickPlayerControllerHookFuncCTOR() {
     func((void*)rcx);
 }
 
+void * fbcmc_ptr;
+void FBrickChatMessageCtorHookFunc() {
+    uintptr_t rcx = 0;
+    uintptr_t rdx = 0;
+    asm volatile (
+        "":
+        "=c"(rcx), "=d"(rdx)
+        ::
+    );
+    ChatMessageList.push_back(rcx);
+
+    using fn = void(__thiscall *)(void * abgs, void* fbcm);
+    fn func = reinterpret_cast<fn>(fbcmc_ptr);
+    func((void*)rcx, (void*)rdx);
+}
+
 void * abpchfd_ptr;
 void ABrickPlayerControllerHookFuncDTOR() {
     uintptr_t rcx = 0;
@@ -268,6 +293,7 @@ uintptr_t ABrickPlayerControllerHookDtorAdr = (uintptr_t) GetModuleHandleA(NULL)
 uintptr_t ABrickVehicleControllerHookCtorAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickVehicleControllerHookCtorAdr_Offset;
 uintptr_t ABrickVehicleControllerHookDtorAdr = (uintptr_t) GetModuleHandleA(NULL) + ABrickVehicleControllerHookDtorAdr_Offset;
 
+uintptr_t AddChatMessageAdr = (uintptr_t) GetModuleHandleA(NULL) + FBrickChatMessageCtor_Offset;
 
 // Main function
 void Run() {
@@ -279,11 +305,16 @@ void Run() {
     MH_CreateHook((void*)ABrickPlayerControllerHookDtorAdr, (void*)ABrickPlayerControllerHookFuncDTOR, &abpchfd_ptr);
     MH_EnableHook((void*)ABrickPlayerControllerHookDtorAdr);
 
+    // Hook ABrickVehicle ctor and dtor
     MH_CreateHook((void*)ABrickVehicleControllerHookCtorAdr, (void*)ABrickVehicleHookFuncCTOR, &abvhfc_ptr);
     MH_EnableHook((void*)ABrickVehicleControllerHookCtorAdr);
 
     MH_CreateHook((void*)ABrickVehicleControllerHookDtorAdr, (void*)ABrickVehicleHookFuncDTOR, &abvhfd_ptr);
     MH_EnableHook((void*)ABrickVehicleControllerHookDtorAdr);
+
+    // Hook ServerSendChatMessage
+    MH_CreateHook((void*) AddChatMessageAdr, (void*)FBrickChatMessageCtorHookFunc, &fbcmc_ptr);
+    MH_EnableHook((void*) AddChatMessageAdr);
 
     // Populate GWorld, since it will always be available.
     activeGWorld = std::make_shared<GWorld>();
@@ -299,7 +330,8 @@ void Run() {
         response["/end/match"] = "End the current match.";
         response["/end/round"] = "End the current round.";
         response["/restart/game"] = "Restart the current game.";
-        //response["/get/messages"] = "Return all sent messages on the server. Not implemented yet.";
+        response["/remove/messages"] = "Clear server message buffer.";
+        response["/get/messages"] = "Return all sent messages on the server.";
         response["/adminSay"] = "Say something as the admin. Include the message as the body of the request (JSON not required).";
         response["/restart/allPlayers"] = "Restart all players (including dead players) to spawn.";
         response["/get/allPlayers"] = "Return a JSON of all players, in the format {memory address, name}.";
@@ -449,22 +481,58 @@ void Run() {
                 return crow::response(503);
             }
         });
-    /*
+
     CROW_ROUTE(app, "/ABrickGameMode/get/messages").methods(crow::HTTPMethod::Get)([](){
             refreshGlobals();
-
             if (InternalClassExists(activeABrickGameMode)) {
                 crow::json::wvalue response;
-
                 std::vector<crow::json::wvalue> listOfMessages;
 
+                for (auto messageAdr : ChatMessageList) {
+                    auto messagePtr = static_cast<FBrickChatMessage *>((void*)messageAdr);
 
+                    using convert_type = std::codecvt_utf8<wchar_t>;
+                    std::wstring_convert<convert_type, wchar_t> converter;
 
+                    std::pair<std::string, crow::json::wvalue> originPlayer("OriginPlayer", converter.to_bytes(messagePtr->sourcePlayer.playername.ToWString()));
+                    std::pair<std::string, crow::json::wvalue> receivingPlayer("ReceivingPlayer", converter.to_bytes(messagePtr->receivingPlayer.playername.ToWString()));
+
+                    FText * ft = new FText();
+                    CALL_BR_FUNC<FText*(__thiscall*)(FBrickChatMessage * fbcm, FText * ft)>(FBrickChatMessageGetMessageText_Offset, (FBrickChatMessage*)messageAdr, ft);
+
+                    auto mcText = converter.to_bytes(GetFStringFromFText(ft)->ToWString());
+
+                    std::time_t result = std::time(nullptr);
+                    auto ts = std::string(std::asctime(std::localtime(&result)));
+                    ts.erase(std::remove(ts.begin(), ts.end(), '\n'), ts.cend());
+
+                    std::pair<std::string, crow::json::wvalue> messageContent("MessageContent", mcText);
+                    std::pair<std::string, crow::json::wvalue> timestamp("Timestamp", ts);
+
+                    crow::json::wvalue value{originPlayer, receivingPlayer, messageContent, timestamp};
+                    if (mcText != "INVALID TYPE") {
+                        listOfMessages.push_back(value);
+                    }
+                    delete(ft);
+                }
+                response["messages"] = crow::json::wvalue(listOfMessages);
+
+                return response;
             } else {
                 return crow::json::wvalue();
             }
         });
-        */
+
+    CROW_ROUTE(app, "/ABrickGameMode/remove/messages").methods(crow::HTTPMethod::Post)([](){
+            refreshGlobals();
+            if (InternalClassExists(activeABrickGameMode)) {
+                ChatMessageList.clear();
+                return crow::response(200);
+            } else {
+                return crow::response(503);
+            }
+        });
+
     CROW_ROUTE(app, "/ABrickGameMode/get/allPlayers").methods(crow::HTTPMethod::Get)([](){
         refreshGlobals();
 

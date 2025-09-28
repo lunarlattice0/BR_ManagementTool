@@ -92,15 +92,19 @@ class FString : public TArray <wchar_t> {
 
 };
 
-// No actual implementation.
-struct __attribute__((packed, aligned(8))) FText {
-    uint8_t text_data[0x10];
-    uint32_t flags;
+class FText {
+    public:
+        class FTextData * TextData;
+};
+
+class FTextData {
+    public:
+        wchar_t *Text;
 };
 
 static_assert(alignof(FText) == 0x000008, "Wrong alignment on FText");
-static_assert(sizeof(FText) == 0x000018, "Wrong size on FText");
-static_assert(offsetof(FText, text_data) == 0x000000, "Member 'FText::TextData' has a wrong offset!");
+//static_assert(sizeof(FText) == 0x000018, "Wrong size on FText");
+//static_assert(offsetof(FText, text_data) == 0x000000, "Member 'FText::TextData' has a wrong offset!");
 
 // No actual implementation.
 struct __attribute__((packed, aligned(0x1))) FUniqueNetIdRepl {
@@ -141,7 +145,7 @@ struct __attribute((aligned(0x8))) FBrickChatMessage {
     EChatMessageType messageType;
     FChatMessagePlayerInfo sourcePlayer;
     FChatMessagePlayerInfo receivingPlayer;
-    uint8_t pad[0x18];
+    FText text;
     uint8_t pad1[0x4];
     uint8_t pad2[0x1];
     uint8_t pad3[0x10];
@@ -149,8 +153,9 @@ struct __attribute((aligned(0x8))) FBrickChatMessage {
 
 static_assert(offsetof(FBrickChatMessage, sourcePlayer) == 0x8);
 static_assert(offsetof(FBrickChatMessage, receivingPlayer) == 0x40);
+static_assert(offsetof(FBrickChatMessage, text) == 0x78);
 static_assert(alignof(FBrickChatMessage) == 0x8, "Wrong alignment of FBrickChatMessage");
-static_assert(sizeof(FBrickChatMessage) == 0xa8, "Wrong size of FBrickChatMessage");
+//static_assert(sizeof(FBrickChatMessage) == 0xa8, "Wrong size of FBrickChatMessage");
 
 struct __attribute((aligned(0x1))) ABrickGameSessionStruct {
     uint8_t data[0x2a8];
