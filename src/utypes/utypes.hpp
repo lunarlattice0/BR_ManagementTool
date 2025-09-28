@@ -92,19 +92,14 @@ class FString : public TArray <wchar_t> {
 
 };
 
-class FText {
-    public:
-        class FTextData * TextData;
-};
-
-class FTextData {
-    public:
-        wchar_t *Text;
+struct __attribute__((packed, aligned(8))) FText {
+    uint8_t text_data[0x10];
+    uint32_t flags;
 };
 
 static_assert(alignof(FText) == 0x000008, "Wrong alignment on FText");
-//static_assert(sizeof(FText) == 0x000018, "Wrong size on FText");
-//static_assert(offsetof(FText, text_data) == 0x000000, "Member 'FText::TextData' has a wrong offset!");
+static_assert(sizeof(FText) == 0x000018, "Wrong size on FText");
+static_assert(offsetof(FText, text_data) == 0x000000, "Member 'FText::TextData' has a wrong offset!");
 
 // No actual implementation.
 struct __attribute__((packed, aligned(0x1))) FUniqueNetIdRepl {
