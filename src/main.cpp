@@ -4,7 +4,7 @@
 #include <memory>
 
 int main() {
-    if (!std::filesystem::exists("./libbrlmt_payload.dll")) {
+    if (!std::filesystem::exists("./libbrlmt_payload.dll")) { [[unlikely]]
         std::cerr << "Missing brlmt_payload.dll" << std::endl;
         return 1;
     }

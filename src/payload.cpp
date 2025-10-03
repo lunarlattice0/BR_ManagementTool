@@ -4,6 +4,7 @@
 #include "crow/http_response.h"
 #include "crow/http_server.h"
 #include "crow/json.h"
+#include <algorithm>
 #include <codecvt>
 #include <consoleapi.h>
 #include <cstdint>
@@ -16,6 +17,7 @@
 #include <stdexcept>
 #include <string>
 #include <windows.h>
+#include <wingdi.h>
 #include <winnt.h>
 #include <winscard.h>
 #include <crow.h>
@@ -552,6 +554,15 @@ void Run() {
                 // Consider bumping min C++ to 23? Unicode support?
 
                 // TODO: Get steamid
+
+                // Hack: Delete any INVALID PLAYER
+                if (converter.to_bytes(fstr->ToWString()) == "INVALID PLAYER") {
+                    ABrickPlayerControllerList.erase(std::remove(ABrickPlayerControllerList.begin(), ABrickPlayerControllerList.end(), playerController), ABrickPlayerControllerList.end());
+                    delete(fstr);
+                    continue;
+                }
+
+
                 std::pair<std::string, crow::json::wvalue> name("name", converter.to_bytes(fstr->ToWString()));
                 std::pair<std::string, crow::json::wvalue> memory_adr("memory_adr", std::to_string(playerController));
                 crow::json::wvalue value{name, memory_adr};
@@ -573,7 +584,10 @@ void Run() {
                 throw std::out_of_range("Vehicle not found");
             }
 
-            CALL_BR_FUNC<void(__thiscall*)(void*abpc)>(ABrickVehicle_ScrapVehicle_Offset, (void*)memory_adr);
+            CALL_BR_FUNC<void(__thiscall*)(void* abpc, void* abv, bool unknown)>(ABrickVehicle_ScrapVehicle_Offset, (void*)ABrickPlayerControllerList.at(0), (void*)memory_adr, true);
+
+
+            //CALL_BR_FUNC<void(__thiscall*)(void*abpc)>(ABrickVehicle_ScrapVehicle_Offset, (void*)memory_adr);
 
             return crow::response(200);
         } else {
@@ -765,7 +779,7 @@ void Run() {
 
 // Required Win32 Signature; don't modify
 bool __stdcall DllMain(void *, std::uint32_t reason, void *) {
-    if (reason == DLL_PROCESS_ATTACH) {
+    if (reason == DLL_PROCESS_ATTACH) { [[likely]]
         AllocConsole();
         freopen("CONOUT$","w", stdout);
         freopen("CONOUT$","w", stderr);

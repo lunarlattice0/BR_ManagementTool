@@ -158,3 +158,9 @@ struct __attribute((aligned(0x1))) ABrickGameSessionStruct {
 
 static_assert(alignof(ABrickGameSessionStruct) == 0x1, "Wrong alignment of ABrickGameSession");
 static_assert(sizeof(ABrickGameSessionStruct) == 0x2a8, "Wrong size of ABrickGameSession");
+
+struct FakeABPC {
+    uint8_t data[0x227];
+    uint64_t value = 0;
+};
+static_assert(offsetof(FakeABPC, value) == 0x228);
