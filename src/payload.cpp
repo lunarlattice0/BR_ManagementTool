@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <codecvt>
 #include <consoleapi.h>
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <libloaderapi.h>
@@ -491,13 +492,14 @@ void Run() {
                 std::vector<crow::json::wvalue> listOfMessages;
 
                 for (auto messageAdr : ChatMessageList) {
-                    auto messagePtr = static_cast<FBrickChatMessage *>((void*)messageAdr);
+                    auto messagePtr = reinterpret_cast<FBrickChatMessage *>((void*)messageAdr);
 
                     using convert_type = std::codecvt_utf8<wchar_t>;
                     std::wstring_convert<convert_type, wchar_t> converter;
 
-                    std::pair<std::string, crow::json::wvalue> originPlayer("OriginPlayer", converter.to_bytes(messagePtr->sourcePlayer.playername.ToWString()));
-                    std::pair<std::string, crow::json::wvalue> receivingPlayer("ReceivingPlayer", converter.to_bytes(messagePtr->receivingPlayer.playername.ToWString()));
+                    // seemingly broken, dont use
+                    //std::pair<std::string, crow::json::wvalue> originPlayer("OriginPlayer", converter.to_bytes(messagePtr->sourcePlayer.playername.ToWString()));
+                    //std::pair<std::string, crow::json::wvalue> receivingPlayer("ReceivingPlayer", converter.to_bytes(messagePtr->receivingPlayer.playername.ToWString()));
 
                     FText * ft = new FText();
                     CALL_BR_FUNC<FText*(__thiscall*)(FBrickChatMessage * fbcm, FText * ft)>(FBrickChatMessageGetMessageText_Offset, (FBrickChatMessage*)messageAdr, ft);
@@ -511,7 +513,7 @@ void Run() {
                     std::pair<std::string, crow::json::wvalue> messageContent("MessageContent", mcText);
                     std::pair<std::string, crow::json::wvalue> timestamp("Timestamp", ts);
 
-                    crow::json::wvalue value{originPlayer, receivingPlayer, messageContent, timestamp};
+                    crow::json::wvalue value{messageContent, timestamp};
                     if (mcText != "INVALID TYPE") {
                         listOfMessages.push_back(value);
                     }

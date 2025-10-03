@@ -138,8 +138,8 @@ static_assert(sizeof(FChatMessagePlayerInfo) == 0x38, "Wrong size of FChatMessag
 
 struct __attribute((aligned(0x8))) FBrickChatMessage {
     EChatMessageType messageType;
-    FChatMessagePlayerInfo sourcePlayer;
-    FChatMessagePlayerInfo receivingPlayer;
+    FChatMessagePlayerInfo sourcePlayer; // unreliable, don't use
+    FChatMessagePlayerInfo receivingPlayer; // unreliable, don't use
     FText text;
     uint8_t pad1[0x4];
     uint8_t pad2[0x1];
