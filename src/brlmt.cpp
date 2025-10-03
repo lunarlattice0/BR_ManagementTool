@@ -47,7 +47,7 @@ Game::Game() {
 
     this->snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 
-    if (Process32First(snapshot, &entry) == TRUE) {
+    if (Process32First(snapshot, &entry) == TRUE) { [[likely]]
         while (Process32Next(snapshot, &entry) == TRUE) {
             if (stricmp(entry.szExeFile, "BrickRigs-Win64-Shipping.exe") == 0) {
                 this->hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, entry.th32ProcessID);

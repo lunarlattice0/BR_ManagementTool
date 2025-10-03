@@ -19,7 +19,8 @@ constexpr uintptr_t ABrickGameSession_Get_Offset = 0x0d20e10;
 constexpr uintptr_t ABrickGameSession_KickPlayer_Offset = 0x0d2d4b0;
 constexpr uintptr_t ABrickGameSession_BanPlayer_Offset = 0x0d2d4c0;
 constexpr uintptr_t ABrickVehicle_GetSpawningPlayerControllerAdr_Offset =  0x0e14160;
-constexpr uintptr_t ABrickVehicle_ScrapVehicle_Offset = 0x0e21820;
+
+constexpr uintptr_t ABrickVehicle_ScrapVehicle_Offset = 0x0d3c530;
 
 constexpr uintptr_t FTextFromFString_Offset = 0x0f53290;
 constexpr uintptr_t GetPlayerUniqueNetId_Offset = 0x0c9a5c0;
