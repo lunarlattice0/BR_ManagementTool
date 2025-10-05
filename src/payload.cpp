@@ -586,6 +586,7 @@ void Run() {
                 throw std::out_of_range("Vehicle not found");
             }
 
+            CALL_BR_FUNC<void(__thiscall*)(void*abv)>(ABrickVehicle_EjectAllCharacters_Offset, (void*)memory_adr);
             CALL_BR_FUNC<void(__thiscall*)(void* abpc, void* abv, bool unknown)>(ABrickVehicle_ScrapVehicle_Offset, (void*)ABrickPlayerControllerList.at(0), (void*)memory_adr, true);
 
 
