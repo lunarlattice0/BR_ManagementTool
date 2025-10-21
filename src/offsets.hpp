@@ -6,7 +6,7 @@
 // Offsets
 constexpr uintptr_t GWorld_Offset = 0x4b3f258;
 constexpr uintptr_t GWorld_PlayerControllerList_Offset = GWorld_Offset + 0x1c0;
-constexpr uintptr_t ABrickGameMode_Get_Offset = 0x140dc6cc0;
+constexpr uintptr_t ABrickGameMode_Get_Offset = 0x0dc6cc0;
 constexpr uintptr_t ABrickGameMode_EndMatch_Offset = 0x0dc4800;
 constexpr uintptr_t ABrickGameMode_RestartGame_Offset = 0x0de63b0;
 constexpr uintptr_t ABrickGameMode_RestartAllPlayers_Offset = 0x0de62f0;
