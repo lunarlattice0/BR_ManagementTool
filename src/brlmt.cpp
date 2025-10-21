@@ -49,7 +49,7 @@ Game::Game() {
 
     if (Process32First(snapshot, &entry) == TRUE) { [[likely]]
         while (Process32Next(snapshot, &entry) == TRUE) {
-            if (stricmp(entry.szExeFile, "BrickRigs-Win64-Shipping.exe") == 0) {
+            if (stricmp(entry.szExeFile, "BrickRigsSteam-Win64-Shipping.exe") == 0) {
                 this->hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, entry.th32ProcessID);
             }
         }
