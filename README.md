@@ -1,5 +1,7 @@
 # BR_ManagementTool
 
+This tool is compatible with version 1.9, but has not been fully tested!
+
 A tool for assisting 24/7 server OPs of Brick Rigs. Currently not restricted to Linux systems, contrary to original plan.
 
 Currently, there are three planned stages of development: Alpha, Beta, and Release. The project is in alpha, meaning that many of the features will be implemented, but in a rough state. In beta, the functions will be cleaned up and grouped into a stable format, before being tested for release.
